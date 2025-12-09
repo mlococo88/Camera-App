@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Field Cam">
-    <title>Field Cam Pro (v9.0)</title>
+    <title>Field Cam Pro (v9.1)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -211,6 +211,17 @@
         <div class="bg-gray-800 rounded-lg w-full max-w-sm p-6 space-y-4 shadow-2xl border border-gray-700">
             <h3 class="text-lg font-bold text-white mb-2">Settings</h3>
             <div><label class="block text-xs uppercase text-gray-400 font-bold mb-1">Project ID</label><input type="text" id="project-id-input" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-600 text-sm"></div>
+            
+            <!-- NEW DEFAULT CAPTIONS -->
+            <div class="pt-2 border-t border-gray-700">
+                <label class="block text-xs uppercase text-gray-400 font-bold mb-2">Default Captions (For New Photos)</label>
+                <div class="space-y-2">
+                    <input type="text" id="default-c1" class="w-full bg-gray-900 text-white rounded p-2 border border-gray-600 text-xs" placeholder="Default Caption 1">
+                    <input type="text" id="default-c2" class="w-full bg-gray-900 text-white rounded p-2 border border-gray-600 text-xs" placeholder="Default Caption 2">
+                    <input type="text" id="default-c3" class="w-full bg-gray-900 text-white rounded p-2 border border-gray-600 text-xs" placeholder="Default Caption 3">
+                </div>
+            </div>
+
             <div class="pt-2 border-t border-gray-700"><label class="block text-xs uppercase text-gray-400 font-bold mb-2">Sensors</label><button id="enable-compass-btn" class="w-full bg-gray-700 text-white text-sm py-2 px-4 rounded border border-gray-600 flex justify-between"><span>Enable Compass</span><span id="compass-status" class="text-xs bg-gray-800 px-2 py-0.5 rounded text-gray-400">Off</span></button></div>
             <div class="pt-2 border-t border-gray-700">
                 <label class="block text-xs uppercase text-gray-400 font-bold mb-2">Data Management</label>
@@ -261,7 +272,12 @@
             photos: [], notes: [], selectedIds: new Set(), isSelectMode: false, currentLocation: "Locating...", videoStream: null, 
             imageCapture: null, nativeResSupported: false, editingId: null, editingNoteId: null, isProcessing: false, 
             projectId: localStorage.getItem('fieldcam_project_id') || "", heading: null, compassEnabled: false, track: null, torchOn: false, weather: "",
-            nextPhotoNumber: parseInt(localStorage.getItem('fieldcam_next_num') || "1") // Photo counter state
+            nextPhotoNumber: parseInt(localStorage.getItem('fieldcam_next_num') || "1"),
+            defaultCaptions: {
+                c1: localStorage.getItem('fieldcam_def_c1') || "",
+                c2: localStorage.getItem('fieldcam_def_c2') || "",
+                c3: localStorage.getItem('fieldcam_def_c3') || ""
+            }
         };
 
         const ui = {
@@ -273,6 +289,12 @@
             projectModal: document.getElementById('project-modal'), projectBtn: document.getElementById('project-settings-btn'), projectIdDisplay: document.getElementById('project-id-display'),
             projectIdInput: document.getElementById('project-id-input'), saveProjectBtn: document.getElementById('save-project-btn'), enableCompassBtn: document.getElementById('enable-compass-btn'),
             backupBtn: document.getElementById('backup-btn'), restoreBtn: document.getElementById('restore-btn'), restoreInput: document.getElementById('restore-input'),
+            // New Inputs
+            defaultInputs: {
+                c1: document.getElementById('default-c1'),
+                c2: document.getElementById('default-c2'),
+                c3: document.getElementById('default-c3')
+            },
             compassStatus: document.getElementById('compass-status'), processing: document.getElementById('processing-overlay'), processingText: document.getElementById('processing-text'),
             errorDisplay: document.getElementById('error-display'), errorMsg: document.getElementById('error-msg'), flash: document.getElementById('flash-element'),
             previewModal: document.getElementById('preview-modal'), previewImg: document.getElementById('preview-img'),
@@ -430,7 +452,30 @@
         }
 
         // --- Init ---
-        function initProjectSettings() { ui.projectIdInput.value = state.projectId; updateProjectDisplay(); ui.projectBtn.onclick = () => ui.projectModal.classList.remove('hidden'); ui.saveProjectBtn.onclick = () => { state.projectId = ui.projectIdInput.value.trim(); localStorage.setItem('fieldcam_project_id', state.projectId); updateProjectDisplay(); ui.projectModal.classList.add('hidden'); }; ui.enableCompassBtn.onclick = enableCompass; }
+        function initProjectSettings() { 
+            ui.projectIdInput.value = state.projectId; 
+            ui.defaultInputs.c1.value = state.defaultCaptions.c1;
+            ui.defaultInputs.c2.value = state.defaultCaptions.c2;
+            ui.defaultInputs.c3.value = state.defaultCaptions.c3;
+            updateProjectDisplay(); 
+            
+            ui.projectBtn.onclick = () => ui.projectModal.classList.remove('hidden');
+            ui.saveProjectBtn.onclick = () => { 
+                state.projectId = ui.projectIdInput.value.trim(); 
+                state.defaultCaptions.c1 = ui.defaultInputs.c1.value.trim();
+                state.defaultCaptions.c2 = ui.defaultInputs.c2.value.trim();
+                state.defaultCaptions.c3 = ui.defaultInputs.c3.value.trim();
+                
+                localStorage.setItem('fieldcam_project_id', state.projectId); 
+                localStorage.setItem('fieldcam_def_c1', state.defaultCaptions.c1);
+                localStorage.setItem('fieldcam_def_c2', state.defaultCaptions.c2);
+                localStorage.setItem('fieldcam_def_c3', state.defaultCaptions.c3);
+                
+                updateProjectDisplay(); 
+                ui.projectModal.classList.add('hidden'); 
+            }; 
+            ui.enableCompassBtn.onclick = enableCompass; 
+        }
         function updateProjectDisplay() { ui.projectIdDisplay.textContent = state.projectId || "No Project"; }
         function enableCompass() { if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') { DeviceOrientationEvent.requestPermission().then(r => { if (r=='granted') startCompassListener(); }).catch(console.error); } else startCompassListener(); }
         function startCompassListener() { window.addEventListener('deviceorientation', (e) => { let h = e.webkitCompassHeading || Math.abs(e.alpha - 360); if (h) { state.heading = Math.round(h); ui.compassText.textContent = `${['N','NE','E','SE','S','SW','W','NW'][Math.round(state.heading/45)%8]} ${state.heading}°`; } }); state.compassEnabled = true; ui.compassStatus.textContent="On"; ui.compassStatus.classList.replace('text-gray-400','text-green-400'); ui.compassOverlay.classList.remove('hidden'); }
@@ -475,8 +520,15 @@
                 state.nextPhotoNumber++;
                 localStorage.setItem('fieldcam_next_num', state.nextPhotoNumber);
 
+                // Use Default Captions
+                const captions = {
+                    c1: state.defaultCaptions.c1,
+                    c2: state.defaultCaptions.c2,
+                    c3: state.defaultCaptions.c3
+                };
+
                 const photo = { 
-                    id: Date.now(), originalBlob: blob, displayUrl: null, captions: { c1: "", c2: "", c3: "" }, metaNote: "", 
+                    id: Date.now(), originalBlob: blob, displayUrl: null, captions: captions, metaNote: "", 
                     timestamp: new Date().toLocaleString(), 
                     location: state.currentLocation, lat: state.currentLat, lon: state.currentLon,
                     projectId: state.projectId, compass: state.heading ? ui.compassText.textContent : "",
@@ -624,7 +676,18 @@
             notes.sort((a,b) => b.id - a.id).forEach(n => {
                 const el = document.createElement('div'); 
                 el.className = 'bg-gray-800 p-3 rounded-lg border border-gray-700 shadow-sm transition-colors hover:border-gray-600';
-                el.innerHTML = `<div class="flex justify-between items-start mb-1"><span class="text-[10px] text-gray-400 font-mono">${n.timestamp}</span><div class="flex gap-3"><button class="text-blue-400 hover:text-blue-300 text-xs" onclick="editNote(${n.id})" title="Edit"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg></button><button class="text-red-400 hover:text-red-300 text-xs" onclick="deleteNote(${n.id})" title="Delete"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></button></div></div><div class="text-sm text-white whitespace-pre-wrap">${n.text}</div><div class="mt-2 flex gap-2 text-[10px] text-gray-500"><span>📍 ${n.location}</span>${n.projectId ? `<span>📁 ${n.projectId}</span>` : ''}</div>`;
+                el.innerHTML = `
+                    <div class="flex justify-between items-start mb-1">
+                        <span class="text-[10px] text-gray-400 font-mono">${n.timestamp}</span>
+                        <div class="flex gap-3">
+                            <button class="text-blue-400 hover:text-blue-300 text-xs" onclick="editNote(${n.id})" title="Edit"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg></button>
+                            <button class="text-red-400 hover:text-red-300 text-xs" onclick="deleteNote(${n.id})" title="Delete"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></button>
+                        </div>
+                    </div>
+                    <div class="text-sm text-white whitespace-pre-wrap">${n.text}</div>
+                    <div class="mt-2 flex gap-2 text-[10px] text-gray-500"><span>📍 ${n.location}</span>${n.projectId ? `<span>📁 ${n.projectId}</span>` : ''}</div>
+                    ${n.weather ? `<div class="mt-1 text-[9px] text-yellow-500/80">Weather: ${n.weather}</div>` : ''}
+                `;
                 ui.notesList.appendChild(el);
             });
         }
