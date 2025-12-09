@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Field Cam">
-    <title>Field Cam Pro (v7.1)</title>
+    <title>Field Cam Pro (v7.2)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -29,8 +29,9 @@
             overscroll-behavior-y: contain;
             padding-top: env(safe-area-inset-top);
             padding-bottom: env(safe-area-inset-bottom);
-            touch-action: none;
-            background-color: #111827; /* Dark gray match */
+            touch-action: pan-y; /* Allow scrolling */
+            background-color: #111827;
+            user-select: none; /* Prevent text selection during long press */
         }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
@@ -95,30 +96,26 @@
 
         <!-- Gallery Panel -->
         <div id="gallery-panel" class="w-full h-[55%] md:h-full md:w-[400px] bg-gray-900 flex flex-col border-t border-gray-700 md:border-t-0 md:border-l shadow-2xl z-20">
-            <!-- Batch Action Bar -->
-            <div id="group-actions-bar" class="bg-gray-800 p-3 space-y-3 hidden flex-shrink-0 border-b border-gray-700 flex flex-col h-full md:h-auto">
-                 <div class="flex justify-between items-center shrink-0">
-                     <h3 class="text-sm font-bold text-blue-400 uppercase">Batch Edit</h3>
+            <!-- SELECTION TOOLBAR (Replaces Batch Edit Inputs) -->
+            <div id="selection-toolbar" class="bg-gray-800 p-3 hidden flex-shrink-0 border-b border-gray-700">
+                 <div class="flex justify-between items-center">
+                     <div class="flex items-center gap-2">
+                        <button id="cancel-select-mode" class="text-gray-400 hover:text-white">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                        <span id="selection-count" class="text-sm font-bold text-white">0 Selected</span>
+                     </div>
                      <div class="flex gap-2">
-                        <button id="delete-selected-btn" class="bg-red-600/20 text-red-400 border border-red-600/50 text-xs font-bold py-1 px-3 rounded">Delete</button>
-                        <button id="download-selected-btn" class="bg-green-600 text-white text-xs font-bold py-1 px-3 rounded">Download</button>
+                        <button id="delete-selected-btn" class="bg-red-600/20 text-red-400 border border-red-600/50 text-xs font-bold py-2 px-3 rounded flex items-center gap-1"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+                        <button id="download-selected-btn" class="bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold py-2 px-3 rounded"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg></button>
+                        <button id="open-batch-modal-btn" class="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold py-2 px-3 rounded flex items-center gap-1">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                            Edit
+                        </button>
                      </div>
                  </div>
-                 <div class="space-y-2 overflow-y-auto flex-1 md:flex-none py-2">
-                    <p class="text-[10px] text-gray-500 italic">Enter text to overwrite. Leave blank to keep existing.</p>
-                    <div class="space-y-1"><label class="text-[10px] uppercase text-gray-500 font-bold">Caption 1</label><input type="text" id="group-caption-1" class="w-full bg-gray-900 text-white rounded px-3 py-2 border border-gray-600 text-xs"></div>
-                    <div class="space-y-1"><label class="text-[10px] uppercase text-gray-500 font-bold">Caption 2</label><input type="text" id="group-caption-2" class="w-full bg-gray-900 text-white rounded px-3 py-2 border border-gray-600 text-xs"></div>
-                    <div class="space-y-1"><label class="text-[10px] uppercase text-gray-500 font-bold">Caption 3</label><input type="text" id="group-caption-3" class="w-full bg-gray-900 text-white rounded px-3 py-2 border border-gray-600 text-xs"></div>
-                    <div class="space-y-1">
-                        <label class="text-[10px] uppercase text-gray-500 font-bold flex justify-between"><span>Notes</span><button id="group-mic-btn" class="text-blue-400">Mic</button></label>
-                        <textarea id="group-notes" class="w-full bg-gray-900 text-white rounded px-3 py-2 border border-gray-600 text-xs h-20 resize-none"></textarea>
-                    </div>
-                 </div>
-                 <div class="flex gap-2 shrink-0 pt-2 border-t border-gray-700">
-                    <button id="apply-group-caption" class="flex-1 bg-blue-600 text-white font-bold py-3 rounded text-sm">Apply</button>
-                    <button id="cancel-select-mode" class="flex-1 bg-gray-700 text-white font-bold py-3 rounded text-sm">Cancel</button>
-                 </div>
             </div>
+
             <!-- Standard Header -->
             <div id="gallery-header" class="p-3 flex justify-between items-center bg-gray-800 border-b border-gray-700 flex-shrink-0">
                 <div class="flex items-center gap-2"><span class="font-bold text-sm">Gallery</span><span id="gallery-count" class="text-xs bg-gray-700 px-2 py-0.5 rounded-full text-gray-300">0</span></div>
@@ -128,7 +125,7 @@
                 </div>
             </div>
             <!-- Photo Grid -->
-            <div id="gallery" class="flex-1 p-3 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-3 gap-2 overflow-y-auto no-scrollbar content-start">
+            <div id="gallery" class="flex-1 p-3 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-3 gap-2 overflow-y-auto no-scrollbar content-start select-none">
                  <div id="gallery-placeholder" class="col-span-full flex flex-col items-center justify-center text-gray-500 mt-10 space-y-2"><p class="text-xs">No photos taken yet</p></div>
             </div>
         </div>
@@ -163,6 +160,32 @@
             <span class="text-[10px] font-bold">Field Notes</span>
         </button>
     </nav>
+
+    <!-- Batch Edit Modal (NEW) -->
+    <div id="batch-modal" class="fixed inset-0 z-50 bg-black/95 hidden flex flex-col justify-end md:justify-center p-4">
+        <div class="bg-gray-800 rounded-t-xl md:rounded-xl w-full max-w-md p-6 space-y-4 shadow-2xl border border-gray-700 mx-auto">
+            <div class="flex justify-between items-center mb-2">
+                <h3 class="text-lg font-bold text-white">Batch Edit</h3>
+                <span class="text-xs text-gray-400 bg-gray-700 px-2 py-1 rounded" id="batch-count-label">0 Selected</span>
+            </div>
+            
+            <div class="space-y-3 max-h-[60vh] overflow-y-auto">
+                <p class="text-[10px] text-gray-500 italic">Enter text to overwrite. Leave blank to keep existing data.</p>
+                <div><label class="block text-xs uppercase text-gray-400 font-bold mb-1">Caption 1 (Top)</label><input type="text" id="group-caption-1" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-600 text-sm focus:border-blue-500 outline-none" placeholder="e.g. Structure 105"></div>
+                <div><label class="block text-xs uppercase text-gray-400 font-bold mb-1">Caption 2 (Middle)</label><input type="text" id="group-caption-2" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-600 text-sm focus:border-blue-500 outline-none" placeholder="e.g. Pier 3"></div>
+                <div><label class="block text-xs uppercase text-gray-400 font-bold mb-1">Caption 3 (Bottom)</label><input type="text" id="group-caption-3" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-600 text-sm focus:border-blue-500 outline-none" placeholder="e.g. Spalling"></div>
+                <div>
+                    <label class="block text-xs uppercase text-gray-400 font-bold mb-1 flex justify-between"><span>Notes (Metadata)</span><button id="group-mic-btn" class="text-blue-400 hover:text-white">Mic</button></label>
+                    <textarea id="group-notes" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-600 text-sm h-20 resize-none focus:border-blue-500 outline-none"></textarea>
+                </div>
+            </div>
+
+            <div class="flex gap-2 pt-2">
+                <button id="cancel-batch-btn" class="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 rounded text-sm">Cancel</button>
+                <button id="apply-batch-btn" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded text-sm">Apply Changes</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Settings & Modals -->
     <div id="project-modal" class="fixed inset-0 z-50 bg-black/95 hidden flex items-center justify-center p-4">
@@ -234,9 +257,20 @@
             previewModal: document.getElementById('preview-modal'), previewImg: document.getElementById('preview-img'),
             inputs: { c1: document.getElementById('modal-caption-1'), c2: document.getElementById('modal-caption-2'), c3: document.getElementById('modal-caption-3'), meta: document.getElementById('modal-metadata') },
             saveBtn: document.getElementById('save-photo-btn'), closeBtn: document.getElementById('close-preview-btn'), downloadSingleBtn: document.getElementById('preview-download-btn'),
-            deleteSingleBtn: document.getElementById('preview-delete-btn'), galleryHeader: document.getElementById('gallery-header'), groupActions: document.getElementById('group-actions-bar'),
-            toggleSelect: document.getElementById('toggle-select-mode'), cancelSelect: document.getElementById('cancel-select-mode'), downloadAll: document.getElementById('download-all-btn'),
-            downloadSelected: document.getElementById('download-selected-btn'), deleteSelected: document.getElementById('delete-selected-btn'), applyGroup: document.getElementById('apply-group-caption'),
+            deleteSingleBtn: document.getElementById('preview-delete-btn'), galleryHeader: document.getElementById('gallery-header'), 
+            // Selection UI
+            selectionToolbar: document.getElementById('selection-toolbar'),
+            selectionCount: document.getElementById('selection-count'),
+            cancelSelectBtn: document.getElementById('cancel-select-mode'),
+            toggleSelect: document.getElementById('toggle-select-mode'), 
+            downloadAll: document.getElementById('download-all-btn'),
+            downloadSelected: document.getElementById('download-selected-btn'), deleteSelected: document.getElementById('delete-selected-btn'),
+            openBatchBtn: document.getElementById('open-batch-modal-btn'),
+            // Batch Modal UI
+            batchModal: document.getElementById('batch-modal'),
+            batchCountLabel: document.getElementById('batch-count-label'),
+            cancelBatchBtn: document.getElementById('cancel-batch-btn'),
+            applyBatchBtn: document.getElementById('apply-batch-btn'),
             groupInputs: [document.getElementById('group-caption-1'), document.getElementById('group-caption-2'), document.getElementById('group-caption-3'), document.getElementById('group-notes')],
             torchBtn: document.getElementById('torch-btn'), micBtns: { single: document.getElementById('single-mic-btn'), group: document.getElementById('group-mic-btn'), note: document.getElementById('note-mic-btn') },
             cameraContainer: document.getElementById('camera-container'), notesList: document.getElementById('notes-list'), newNoteInput: document.getElementById('new-note-input'), 
@@ -251,15 +285,10 @@
         
         // --- Storage Helpers (Robustness) ---
         async function prepPhotoForSave(p) {
-            // Convert Blob to ArrayBuffer for SAFE IDB storage
             const buffer = await p.finalBlob.arrayBuffer();
-            // Create a clone without Blobs/URLs
             const safeObj = { ...p };
-            delete safeObj.originalBlob;
-            delete safeObj.displayUrl;
-            delete safeObj.finalBlob;
-            safeObj.finalBuffer = buffer; // Store as buffer
-            return safeObj;
+            delete safeObj.originalBlob; delete safeObj.displayUrl; delete safeObj.finalBlob;
+            safeObj.finalBuffer = buffer; return safeObj;
         }
 
         // --- Init ---
@@ -306,11 +335,8 @@
                 
                 const photo = { id: Date.now(), originalBlob: blob, displayUrl: null, captions: { c1: "", c2: "", c3: "" }, metaNote: "", timestamp: new Date().toLocaleString(), location: state.currentLocation, projectId: state.projectId, compass: state.heading ? ui.compassText.textContent : "" };
                 await processPhotoVisuals(photo); 
-                
-                // SAVE SAFE
                 const safeP = await prepPhotoForSave(photo);
                 await DB.add('photos', safeP); 
-                
                 state.photos.unshift(photo); renderGallery();
             } catch (err) { alert("Failed capture: " + err); } finally { setProcessing(false); }
         }
@@ -334,29 +360,108 @@
         // --- Gallery/Notes UI ---
         function renderGallery() {
             ui.gallery.innerHTML = ''; ui.galleryCount.innerText = state.photos.length;
-            if (state.photos.length === 0) { ui.downloadAll.classList.add('hidden'); ui.gallery.innerHTML = `<div id="gallery-placeholder" class="col-span-full flex flex-col items-center justify-center text-gray-500 mt-10 space-y-2"><p class="text-xs">No photos yet</p></div>`; } 
-            else {
+            if (state.photos.length === 0) { 
+                ui.downloadAll.classList.add('hidden'); 
+                ui.gallery.innerHTML = `<div id="gallery-placeholder" class="col-span-full flex flex-col items-center justify-center text-gray-500 mt-10 space-y-2"><p class="text-xs">No photos yet</p></div>`; 
+            } else {
                 ui.downloadAll.classList.remove('hidden');
                 state.photos.forEach(p => {
                     const div = document.createElement('div');
                     div.className = `grid-item-aspect bg-black rounded overflow-hidden cursor-pointer relative group border-2 ${state.selectedIds.has(p.id)?'border-blue-500':'border-transparent'}`;
+                    // Long press handlers
+                    div.addEventListener('mousedown', () => startLongPress(p.id));
+                    div.addEventListener('touchstart', () => startLongPress(p.id), {passive: true});
+                    div.addEventListener('mouseup', cancelLongPress);
+                    div.addEventListener('touchend', cancelLongPress);
+                    div.addEventListener('mousemove', cancelLongPress);
+                    div.addEventListener('click', () => handlePhotoClick(p.id));
+
                     const img = document.createElement('img'); img.src = p.displayUrl;
                     if(state.isSelectMode) {
                         const c = document.createElement('div'); c.className = `absolute top-2 right-2 w-6 h-6 rounded-full border-2 flex items-center justify-center z-10 ${state.selectedIds.has(p.id)?'bg-blue-500 border-blue-500':'bg-black/50 border-white'}`;
                         if(state.selectedIds.has(p.id)) c.innerHTML = `<svg class="w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>`;
                         div.appendChild(c);
                     }
-                    div.appendChild(img); div.onclick = () => handlePhotoClick(p.id); ui.gallery.appendChild(div);
+                    div.appendChild(img); ui.gallery.appendChild(div);
                 });
             }
         }
-        function handlePhotoClick(id) { if (state.isSelectMode) { if(state.selectedIds.has(id)) state.selectedIds.delete(id); else state.selectedIds.add(id); renderGallery(); } else openEditor(id); }
+
+        // Long Press Logic
+        let longPressTimer;
+        function startLongPress(id) {
+            longPressTimer = setTimeout(() => {
+                if (!state.isSelectMode) {
+                    toggleSelectMode(); // Turn on
+                    state.selectedIds.add(id); // Select item
+                    renderGallery();
+                    if(navigator.vibrate) navigator.vibrate(50);
+                }
+            }, 500); // 500ms hold
+        }
+        function cancelLongPress() { clearTimeout(longPressTimer); }
+
+        function toggleSelectMode() {
+            state.isSelectMode = !state.isSelectMode;
+            if (!state.isSelectMode) state.selectedIds.clear();
+            
+            // Toggle UI Visibility
+            if (state.isSelectMode) {
+                ui.selectionToolbar.classList.remove('hidden');
+                ui.galleryHeader.classList.add('hidden');
+            } else {
+                ui.selectionToolbar.classList.add('hidden');
+                ui.galleryHeader.classList.remove('hidden');
+            }
+            renderGallery();
+        }
+
+        function handlePhotoClick(id) { 
+            if (state.isSelectMode) { 
+                if(state.selectedIds.has(id)) state.selectedIds.delete(id); else state.selectedIds.add(id); 
+                ui.selectionCount.innerText = `${state.selectedIds.size} Selected`;
+                renderGallery(); 
+            } else openEditor(id); 
+        }
+
         function openEditor(id) {
             const p = state.photos.find(ph => ph.id === id); if (!p) return;
             state.editingId = id; ui.previewImg.src = p.displayUrl;
             ui.inputs.c1.value = p.captions.c1; ui.inputs.c2.value = p.captions.c2; ui.inputs.c3.value = p.captions.c3; ui.inputs.meta.value = p.metaNote;
             ui.previewModal.classList.remove('hidden');
         }
+
+        // Batch Modal Logic
+        ui.openBatchBtn.onclick = () => {
+            if(state.selectedIds.size === 0) return alert("Select photos first.");
+            ui.batchCountLabel.innerText = `${state.selectedIds.size} Photos Selected`;
+            // Clear inputs for fresh entry
+            ui.groupInputs.forEach(i => i.value = '');
+            ui.batchModal.classList.remove('hidden');
+        };
+        ui.cancelBatchBtn.onclick = () => ui.batchModal.classList.add('hidden');
+        ui.applyBatchBtn.onclick = async () => {
+            const [c1, c2, c3, n] = ui.groupInputs.map(i => i.value);
+            if(!c1 && !c2 && !c3 && !n) return ui.batchModal.classList.add('hidden');
+            
+            ui.batchModal.classList.add('hidden'); // Close modal first
+            setProcessing(true, "Batching..."); await new Promise(r => setTimeout(r, 50));
+            
+            for (const id of state.selectedIds) {
+                const p = state.photos.find(ph => ph.id === id);
+                if(p) {
+                    if(c1) p.captions.c1 = c1; if(c2) p.captions.c2 = c2; 
+                    if(c3) p.captions.c3 = c3; if(n) p.metaNote = n;
+                    await processPhotoVisuals(p); await DB.add('photos', await prepPhotoForSave(p));
+                }
+            }
+            setProcessing(false); 
+            toggleSelectMode(); // Exit selection mode after done
+        };
+
+        // Standard Button Wiring
+        ui.toggleSelect.onclick = toggleSelectMode;
+        ui.cancelSelectBtn.onclick = toggleSelectMode;
 
         async function addNote() { const text = ui.newNoteInput.value.trim(); if (!text) return; const note = { id: Date.now(), text: text, timestamp: new Date().toLocaleString(), location: state.currentLocation, projectId: state.projectId }; await DB.add('notes', note); ui.newNoteInput.value = ''; renderNotes(); }
         async function renderNotes() {
@@ -376,31 +481,17 @@
             saveAs(new Blob([csv], { type: "text/csv;charset=utf-8" }), `Field_Notes_${new Date().toISOString().slice(0,10)}.csv`);
         }
 
-        // --- Common / Wiring ---
         async function restoreSession() {
             try {
                 const saved = await DB.getAll('photos');
                 const restored = [];
-                
                 for (let p of saved) {
-                    // REHYDRATE FROM BUFFER
                     let blob = null;
                     if (p.finalBuffer) blob = new Blob([p.finalBuffer], {type: 'image/jpeg'});
-                    else if (p.finalBlob instanceof Blob) blob = p.finalBlob; // Legacy fallback
-                    
-                    if (blob) {
-                        // Always generate fresh URL on session restore
-                        p.finalBlob = blob;
-                        p.displayUrl = URL.createObjectURL(blob);
-                        restored.push(p);
-                    }
+                    else if (p.finalBlob instanceof Blob) blob = p.finalBlob; 
+                    if (blob) { p.finalBlob = blob; p.displayUrl = URL.createObjectURL(blob); restored.push(p); }
                 }
-                
-                if (restored.length > 0) {
-                    restored.sort((a,b) => b.id - a.id); 
-                    state.photos = restored;
-                    renderGallery();
-                } else renderGallery();
+                if (restored.length > 0) { restored.sort((a,b) => b.id - a.id); state.photos = restored; renderGallery(); } else renderGallery();
                 renderNotes();
             } catch(e) { console.error("Restore failed", e); renderGallery(); }
         }
@@ -410,11 +501,9 @@
         ui.snapBtn.onclick = capturePhoto; ui.addNoteBtn.onclick = addNote; ui.exportNotesBtn.onclick = exportNotes;
         ui.saveBtn.onclick = async () => { if (!state.editingId) return; setProcessing(true, "Saving..."); await new Promise(r => setTimeout(r, 50)); try { const p = state.photos.find(ph => ph.id === state.editingId); p.captions.c1 = ui.inputs.c1.value; p.captions.c2 = ui.inputs.c2.value; p.captions.c3 = ui.inputs.c3.value; p.metaNote = ui.inputs.meta.value; await processPhotoVisuals(p); await DB.add('photos', await prepPhotoForSave(p)); renderGallery(); ui.previewModal.classList.add('hidden'); } catch(e) { alert("Error: "+e.message); } finally { setProcessing(false); } };
         ui.closeBtn.onclick = () => ui.previewModal.classList.add('hidden');
-        ui.toggleSelect.onclick = () => { state.isSelectMode = !state.isSelectMode; state.selectedIds.clear(); ui.groupActions.classList.toggle('hidden'); ui.galleryHeader.classList.toggle('hidden'); renderGallery(); };
-        ui.cancelSelect.onclick = ui.toggleSelect.onclick;
-        ui.applyGroup.onclick = async () => { const [c1, c2, c3, n] = ui.groupInputs.map(i => i.value); if(!c1 && !c2 && !c3 && !n) return; setProcessing(true, "Batching..."); await new Promise(r => setTimeout(r, 50)); for (const id of state.selectedIds) { const p = state.photos.find(ph => ph.id === id); if(p) { if(c1) p.captions.c1 = c1; if(c2) p.captions.c2 = c2; if(c3) p.captions.c3 = c3; if(n) p.metaNote = n; await processPhotoVisuals(p); await DB.add('photos', await prepPhotoForSave(p)); } } setProcessing(false); ui.toggleSelect.click(); };
+        
         ui.downloadAll.onclick = () => downloadZip(null); ui.downloadSelected.onclick = () => downloadZip(state.selectedIds);
-        ui.deleteSelected.onclick = async () => { if(confirm("Delete selected?")) { for(let id of state.selectedIds) await DB.delete('photos', id); state.photos = state.photos.filter(p=>!state.selectedIds.has(p.id)); renderGallery(); ui.toggleSelect.click(); } };
+        ui.deleteSelected.onclick = async () => { if(confirm("Delete selected?")) { for(let id of state.selectedIds) await DB.delete('photos', id); state.photos = state.photos.filter(p=>!state.selectedIds.has(p.id)); state.selectedIds.clear(); toggleSelectMode(); } };
         ui.deleteSingleBtn.onclick = async () => { if(confirm("Delete?")) { await DB.delete('photos', state.editingId); state.photos = state.photos.filter(p=>p.id!==state.editingId); ui.previewModal.classList.add('hidden'); renderGallery(); } };
         ui.downloadSingleBtn.onclick = async () => { const p = state.photos.find(ph => ph.id === state.editingId); if(p) saveAs(await injectExif(p.finalBlob, p), `IMG_${p.id}.jpg`); };
 
