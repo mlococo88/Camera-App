@@ -3,9 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#1f2937">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>Field Cam Pro (v6)</title>
+    <meta name="apple-mobile-web-app-title" content="Field Cam">
+    <title>Field Cam Pro (v7)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -14,6 +16,9 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/piexifjs/1.0.6/piexif.js"></script>
+    
+    <!-- Dynamic Manifest for PWA Installability -->
+    <link rel="manifest" id="my-manifest">
     
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     
@@ -25,6 +30,7 @@
             padding-top: env(safe-area-inset-top);
             padding-bottom: env(safe-area-inset-bottom);
             touch-action: none;
+            background-color: #111827; /* Dark gray match */
         }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
@@ -38,8 +44,6 @@
         @keyframes flash { 0% { opacity: 1; } 100% { opacity: 0; } }
         .flash-overlay { position: absolute; inset: 0; background: white; pointer-events: none; opacity: 0; z-index: 20; }
         .animate-flash { animation: flash 0.3s ease-out; }
-        
-        /* Nav Active State */
         .nav-active { color: #60a5fa; border-top: 2px solid #60a5fa; }
     </style>
 </head>
@@ -52,9 +56,13 @@
             <button id="project-settings-btn" class="flex items-center gap-1 bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded border border-gray-600 transition-colors">
                 <span id="project-id-display" class="text-xs font-mono text-gray-200 max-w-[80px] truncate">No Project</span>
             </button>
+            <button id="new-visit-btn" class="p-1.5 bg-red-900/30 hover:bg-red-700 border border-red-800 rounded text-red-300 transition-colors" title="Start New Visit (Clear All)">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+            </button>
         </div>
-        
-        <div id="location-indicator" class="flex flex-col items-end cursor-pointer group" title="Tap to retry/edit location">
+        <div id="location-indicator" class="flex flex-col items-end cursor-pointer group">
             <div class="flex items-center gap-1 text-xs text-gray-400 group-hover:text-blue-400 transition-colors">
                 <span class="font-semibold" id="gps-status-label">GPS</span>
             </div>
@@ -130,27 +138,17 @@
     <section id="module-notes" class="flex-1 flex flex-col overflow-hidden relative hidden bg-gray-900">
         <div class="p-4 bg-gray-800 border-b border-gray-700 flex justify-between items-center">
             <h2 class="text-lg font-bold text-white">Field Notes</h2>
-            <button id="export-notes-btn" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-2 px-3 rounded flex items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                Export CSV
-            </button>
+            <button id="export-notes-btn" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-2 px-3 rounded flex items-center gap-2">Export CSV</button>
         </div>
-        
-        <!-- Notes List -->
         <div id="notes-list" class="flex-1 overflow-y-auto p-4 space-y-3">
             <div id="notes-placeholder" class="text-center text-gray-500 mt-10 text-sm">No notes recorded yet.</div>
         </div>
-
-        <!-- Note Input Area -->
         <div class="p-4 bg-gray-800 border-t border-gray-700">
             <div class="relative">
                 <textarea id="new-note-input" class="w-full bg-gray-900 text-white rounded-lg p-3 border border-gray-600 focus:border-blue-500 outline-none text-sm resize-none pr-10" rows="3" placeholder="Type observation..."></textarea>
                 <button id="note-mic-btn" class="absolute right-2 bottom-2 text-gray-400 hover:text-blue-400 p-2"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg></button>
             </div>
-            <button id="add-note-btn" class="w-full mt-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg text-sm flex items-center justify-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
-                Add Note
-            </button>
+            <button id="add-note-btn" class="w-full mt-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg text-sm">Add Note</button>
         </div>
     </section>
 
@@ -166,7 +164,7 @@
         </button>
     </nav>
 
-    <!-- Settings Modal (Shared) -->
+    <!-- Settings & Modals -->
     <div id="project-modal" class="fixed inset-0 z-50 bg-black/95 hidden flex items-center justify-center p-4">
         <div class="bg-gray-800 rounded-lg w-full max-w-sm p-6 space-y-4 shadow-2xl border border-gray-700">
             <h3 class="text-lg font-bold text-white mb-2">Project Settings</h3>
@@ -176,10 +174,8 @@
         </div>
     </div>
 
-    <!-- Processing Overlay -->
     <div id="processing-overlay" class="absolute inset-0 z-50 bg-black/80 flex flex-col items-center justify-center hidden backdrop-blur-sm"><div class="loader mb-4"></div><p id="processing-text" class="text-white font-semibold">Processing...</p></div>
 
-    <!-- Photo Edit Modal -->
     <div id="preview-modal" class="fixed inset-0 z-50 bg-black/95 hidden flex flex-col">
         <div class="flex justify-between items-center p-4 bg-gray-900 border-b border-gray-800 shrink-0">
             <button id="close-preview-btn" class="text-gray-400 p-2"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></button>
@@ -196,9 +192,33 @@
     </div>
 
     <script>
-        // --- 1. IndexedDB (Dual Store: photos + notes) ---
+        // --- PWA: Inject Manifest Dynamically ---
+        // This makes the app installable (Add to Home Screen) with proper icon/name
+        const manifest = {
+            "name": "Field Cam Pro",
+            "short_name": "Field Cam",
+            "start_url": ".",
+            "display": "standalone",
+            "background_color": "#111827",
+            "theme_color": "#1f2937",
+            "icons": [{ "src": "https://cdn-icons-png.flaticon.com/512/1042/1042339.png", "sizes": "512x512", "type": "image/png" }]
+        };
+        const stringManifest = JSON.stringify(manifest);
+        const blobManifest = new Blob([stringManifest], {type: 'application/json'});
+        const manifestURL = URL.createObjectURL(blobManifest);
+        document.querySelector('#my-manifest').setAttribute('href', manifestURL);
+
+        // --- 1. IndexedDB & Persistence ---
+        // V7 Update: Requests persistent storage to prevent "Black Screen" data eviction
+        if (navigator.storage && navigator.storage.persist) {
+            navigator.storage.persist().then(granted => {
+                if (granted) console.log("Storage will not be cleared except by explicit user action");
+                else console.log("Storage may be cleared by the UA under storage pressure.");
+            });
+        }
+
         const DB = {
-            name: 'FieldCamDB', version: 2, // Bumped version for Notes store
+            name: 'FieldCamDB', version: 2, 
             open: function() {
                 return new Promise((resolve, reject) => {
                     const req = indexedDB.open(this.name, this.version);
@@ -213,7 +233,8 @@
             },
             add: async function(storeName, obj) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(storeName, 'readwrite'); tx.objectStore(storeName).put(obj); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); },
             getAll: async function(storeName) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(storeName, 'readonly'); const req = tx.objectStore(storeName).getAll(); req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error); }); },
-            delete: async function(storeName, id) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(storeName, 'readwrite'); tx.objectStore(storeName).delete(id); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); }
+            delete: async function(storeName, id) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(storeName, 'readwrite'); tx.objectStore(storeName).delete(id); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); },
+            clear: async function(storeName) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(storeName, 'readwrite'); tx.objectStore(storeName).clear(); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); }
         };
 
         const APP_CONFIG = { jpegQuality: 0.95, fontScale: 25 };
@@ -224,11 +245,10 @@
             track: null, torchOn: false
         };
 
+        // --- UI Ref ---
         const ui = {
-            // Views
             modCamera: document.getElementById('module-camera'), modNotes: document.getElementById('module-notes'),
             navCamera: document.getElementById('nav-camera'), navNotes: document.getElementById('nav-notes'),
-            // Camera
             video: document.getElementById('video'), canvas: document.getElementById('canvas'), snapBtn: document.getElementById('snap'),
             gallery: document.getElementById('gallery'), galleryCount: document.getElementById('gallery-count'), locationText: document.getElementById('location-text'),
             gpsStatus: document.getElementById('gps-status-label'), compassOverlay: document.getElementById('compass-overlay'), compassText: document.getElementById('compass-text'),
@@ -243,34 +263,24 @@
             toggleSelect: document.getElementById('toggle-select-mode'), cancelSelect: document.getElementById('cancel-select-mode'), downloadAll: document.getElementById('download-all-btn'),
             downloadSelected: document.getElementById('download-selected-btn'), deleteSelected: document.getElementById('delete-selected-btn'), applyGroup: document.getElementById('apply-group-caption'),
             groupInputs: [document.getElementById('group-caption-1'), document.getElementById('group-caption-2'), document.getElementById('group-caption-3'), document.getElementById('group-notes')],
-            torchBtn: document.getElementById('torch-btn'),
-            micBtns: { single: document.getElementById('single-mic-btn'), group: document.getElementById('group-mic-btn'), note: document.getElementById('note-mic-btn') },
-            cameraContainer: document.getElementById('camera-container'),
-            // Notes
-            notesList: document.getElementById('notes-list'), newNoteInput: document.getElementById('new-note-input'), 
-            addNoteBtn: document.getElementById('add-note-btn'), exportNotesBtn: document.getElementById('export-notes-btn')
+            torchBtn: document.getElementById('torch-btn'), micBtns: { single: document.getElementById('single-mic-btn'), group: document.getElementById('group-mic-btn'), note: document.getElementById('note-mic-btn') },
+            cameraContainer: document.getElementById('camera-container'), notesList: document.getElementById('notes-list'), newNoteInput: document.getElementById('new-note-input'), 
+            addNoteBtn: document.getElementById('add-note-btn'), exportNotesBtn: document.getElementById('export-notes-btn'),
+            newVisitBtn: document.getElementById('new-visit-btn')
         };
 
-        // --- Navigation ---
+        // --- Core Functions ---
         function switchModule(mod) {
             if (mod === 'camera') {
-                ui.modCamera.classList.remove('hidden'); ui.modNotes.classList.add('hidden');
-                ui.navCamera.classList.add('nav-active'); ui.navNotes.classList.remove('nav-active');
+                ui.modCamera.classList.remove('hidden'); ui.modNotes.classList.add('hidden'); ui.navCamera.classList.add('nav-active'); ui.navNotes.classList.remove('nav-active');
             } else {
-                ui.modCamera.classList.add('hidden'); ui.modNotes.classList.remove('hidden');
-                ui.navCamera.classList.remove('nav-active'); ui.navNotes.classList.add('nav-active');
-                renderNotes(); // Refresh list on view
+                ui.modCamera.classList.add('hidden'); ui.modNotes.classList.remove('hidden'); ui.navCamera.classList.remove('nav-active'); ui.navNotes.classList.add('nav-active'); renderNotes();
             }
         }
-        ui.navCamera.onclick = () => switchModule('camera');
-        ui.navNotes.onclick = () => switchModule('notes');
-
-        // --- Helpers ---
         function setProcessing(active, msg = "Processing...") { state.isProcessing = active; ui.processingText.textContent = msg; ui.processing.classList.toggle('hidden', !active); ui.snapBtn.disabled = active; }
         function triggerFlash() { ui.flash.classList.remove('animate-flash'); void ui.flash.offsetWidth; ui.flash.classList.add('animate-flash'); }
         function strToUCS2(str) { const arr = []; for (let i = 0; i < str.length; i++) { const c = str.charCodeAt(i); arr.push(c & 0xFF); arr.push((c >>> 8) & 0xFF); } arr.push(0); arr.push(0); return arr; }
 
-        // --- Dictation ---
         function setupDictation() {
             const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
             if (!SpeechRec) { Object.values(ui.micBtns).forEach(b => b?.classList.add('hidden')); return; }
@@ -278,12 +288,9 @@
                 const rec = new SpeechRec(); rec.lang = 'en-US'; rec.interimResults = false; rec.maxAlternatives = 1; rec.start();
                 rec.onresult = (e) => { const text = e.results[0][0].transcript; const el = document.getElementById(targetId); el.value = el.value ? el.value + " " + text : text; };
             };
-            ui.micBtns.single.onclick = () => startRec('modal-metadata');
-            ui.micBtns.group.onclick = () => startRec('group-notes');
-            ui.micBtns.note.onclick = () => startRec('new-note-input');
+            ui.micBtns.single.onclick = () => startRec('modal-metadata'); ui.micBtns.group.onclick = () => startRec('group-notes'); ui.micBtns.note.onclick = () => startRec('new-note-input');
         }
 
-        // --- Pinch Zoom ---
         function setupPinchZoom(track) {
             const caps = track.getCapabilities ? track.getCapabilities() : {};
             if (!caps.zoom) return;
@@ -309,20 +316,11 @@
         function initProjectSettings() {
             ui.projectIdInput.value = state.projectId; updateProjectDisplay();
             ui.projectBtn.onclick = () => ui.projectModal.classList.remove('hidden');
-            ui.saveProjectBtn.onclick = () => {
-                state.projectId = ui.projectIdInput.value.trim();
-                localStorage.setItem('fieldcam_project_id', state.projectId);
-                updateProjectDisplay(); ui.projectModal.classList.add('hidden');
-            };
+            ui.saveProjectBtn.onclick = () => { state.projectId = ui.projectIdInput.value.trim(); localStorage.setItem('fieldcam_project_id', state.projectId); updateProjectDisplay(); ui.projectModal.classList.add('hidden'); };
             ui.enableCompassBtn.onclick = enableCompass;
         }
         function updateProjectDisplay() { ui.projectIdDisplay.textContent = state.projectId || "No Project"; }
-
-        function enableCompass() {
-            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-                DeviceOrientationEvent.requestPermission().then(r => { if (r=='granted') startCompassListener(); }).catch(console.error);
-            } else startCompassListener();
-        }
+        function enableCompass() { if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') { DeviceOrientationEvent.requestPermission().then(r => { if (r=='granted') startCompassListener(); }).catch(console.error); } else startCompassListener(); }
         function startCompassListener() {
             window.addEventListener('deviceorientation', (e) => {
                 let h = e.webkitCompassHeading || Math.abs(e.alpha - 360);
@@ -331,33 +329,22 @@
             state.compassEnabled = true; ui.compassStatus.textContent="On"; ui.compassStatus.classList.replace('text-gray-400','text-green-400'); ui.compassOverlay.classList.remove('hidden');
         }
 
-        // --- Camera ---
         async function initCamera() {
-            if (!window.isSecureContext) return showError("Security Error: Must run on HTTPS or Localhost.");
+            if (!window.isSecureContext) return showError("HTTPS Required");
             if (!navigator.mediaDevices) return showError("No Camera API");
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: "environment" }, width: { ideal: 3840 }, height: { ideal: 2160 } } });
                 ui.video.srcObject = stream; state.videoStream = stream; state.track = stream.getVideoTracks()[0];
                 if ('ImageCapture' in window) try { state.imageCapture = new ImageCapture(state.track); state.nativeResSupported = true; } catch(e){}
                 const caps = state.track.getCapabilities ? state.track.getCapabilities() : {};
-                if (caps.torch) {
-                    ui.torchBtn.classList.remove('hidden');
-                    ui.torchBtn.onclick = () => { state.torchOn = !state.torchOn; state.track.applyConstraints({ advanced: [{ torch: state.torchOn }] }); ui.torchBtn.classList.toggle('bg-yellow-500', state.torchOn); };
-                }
+                if (caps.torch) { ui.torchBtn.classList.remove('hidden'); ui.torchBtn.onclick = () => { state.torchOn = !state.torchOn; state.track.applyConstraints({ advanced: [{ torch: state.torchOn }] }); ui.torchBtn.classList.toggle('bg-yellow-500', state.torchOn); }; }
                 setupPinchZoom(state.track);
             } catch (err) { showError("Camera Denied"); }
         }
         function showError(msg) { ui.errorMsg.textContent = msg; ui.errorDisplay.classList.remove('hidden'); ui.snapBtn.classList.add('hidden'); }
+        function initLocation() { if (!navigator.geolocation) return; navigator.geolocation.watchPosition((pos) => { state.currentLocation = `${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}`; ui.locationText.textContent = state.currentLocation; ui.gpsStatus.classList.add("text-green-400"); }, () => { ui.gpsStatus.classList.add("text-red-400"); }, { enableHighAccuracy: true }); }
 
-        function initLocation() {
-            if (!navigator.geolocation) return;
-            navigator.geolocation.watchPosition(
-                (pos) => { state.currentLocation = `${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}`; ui.locationText.textContent = state.currentLocation; ui.gpsStatus.classList.add("text-green-400"); },
-                () => { ui.gpsStatus.classList.add("text-red-400"); }, { enableHighAccuracy: true }
-            );
-        }
-
-        // --- Photos Logic ---
+        // --- Photos ---
         async function capturePhoto() {
             if (state.isProcessing) return; setProcessing(true, "Capturing..."); triggerFlash();
             try {
@@ -365,10 +352,7 @@
                 if (state.nativeResSupported && state.imageCapture) try { blob = await state.imageCapture.takePhoto(); } catch (e) {}
                 if (!blob) { ui.canvas.width = ui.video.videoWidth; ui.canvas.height = ui.video.videoHeight; ui.canvas.getContext('2d').drawImage(ui.video, 0, 0); blob = await new Promise(r => ui.canvas.toBlob(r, 'image/jpeg', 0.95)); }
                 
-                const photo = {
-                    id: Date.now(), originalBlob: blob, displayUrl: null, captions: { c1: "", c2: "", c3: "" }, metaNote: "",
-                    timestamp: new Date().toLocaleString(), location: state.currentLocation, projectId: state.projectId, compass: state.heading ? ui.compassText.textContent : ""
-                };
+                const photo = { id: Date.now(), originalBlob: blob, displayUrl: null, captions: { c1: "", c2: "", c3: "" }, metaNote: "", timestamp: new Date().toLocaleString(), location: state.currentLocation, projectId: state.projectId, compass: state.heading ? ui.compassText.textContent : "" };
                 await processPhotoVisuals(photo); await DB.add('photos', photo); state.photos.unshift(photo); renderGallery();
             } catch (err) { alert("Failed"); } finally { setProcessing(false); }
         }
@@ -377,176 +361,124 @@
             const img = await createImageFromBlob(p.originalBlob);
             const cvs = document.createElement('canvas'); cvs.width = img.width; cvs.height = img.height; const ctx = cvs.getContext('2d');
             ctx.drawImage(img, 0, 0);
-            
             const H = cvs.height; const W = cvs.width; const fs = Math.floor(H / APP_CONFIG.fontScale); const pad = Math.floor(fs / 2);
             ctx.font = `bold ${fs}px Arial, sans-serif`; ctx.fillStyle = '#ffffff'; ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 4; ctx.strokeStyle = '#000000'; ctx.lineWidth = fs / 10; ctx.textBaseline = 'bottom';
             const dt = (t, x, y, a='left') => { if(!t) return; ctx.textAlign=a; ctx.strokeText(t,x,y); ctx.fillText(t,x,y); };
-
             let cY = H - pad; [p.captions.c3, p.captions.c2, p.captions.c1].forEach(t => { if(t){ dt(t, pad, cY); cY -= (fs*1.2); }});
             ctx.font = `bold ${Math.floor(fs*0.7)}px monospace`; let iY = H - pad; dt(p.location, W-pad, iY, 'right'); iY -= (fs*0.9); dt(p.timestamp, W-pad, iY, 'right');
             ctx.textBaseline = 'top'; if(p.projectId) dt(p.projectId, pad, pad); if(p.compass) dt(p.compass, W-pad, pad, 'right');
-
             if (p.displayUrl) URL.revokeObjectURL(p.displayUrl);
             const final = await new Promise(r => cvs.toBlob(r, 'image/jpeg', APP_CONFIG.jpegQuality));
             p.finalBlob = final; p.displayUrl = URL.createObjectURL(final);
         }
         function createImageFromBlob(b) { return new Promise(r => { const u = URL.createObjectURL(b); const i = new Image(); i.onload = () => { URL.revokeObjectURL(u); r(i); }; i.src = u; }); }
 
-        // --- Gallery Render Logic (Restored) ---
+        // --- Gallery & Notes UI ---
         function renderGallery() {
-            ui.gallery.innerHTML = '';
-            ui.galleryCount.innerText = state.photos.length;
-            
-            if (state.photos.length === 0) {
-                ui.downloadAll.classList.add('hidden');
-                ui.gallery.innerHTML = `<div id="gallery-placeholder" class="col-span-full flex flex-col items-center justify-center text-gray-500 mt-10 space-y-2"><p class="text-xs">No photos taken yet</p></div>`;
-            } else {
+            ui.gallery.innerHTML = ''; ui.galleryCount.innerText = state.photos.length;
+            if (state.photos.length === 0) { ui.downloadAll.classList.add('hidden'); ui.gallery.innerHTML = `<div id="gallery-placeholder" class="col-span-full flex flex-col items-center justify-center text-gray-500 mt-10 space-y-2"><p class="text-xs">No photos yet</p></div>`; } 
+            else {
                 ui.downloadAll.classList.remove('hidden');
-                
                 state.photos.forEach(p => {
                     const div = document.createElement('div');
                     div.className = `grid-item-aspect bg-black rounded overflow-hidden cursor-pointer relative group border-2 ${state.selectedIds.has(p.id)?'border-blue-500':'border-transparent'}`;
                     const img = document.createElement('img'); img.src = p.displayUrl;
-                    
                     if(state.isSelectMode) {
-                        const c = document.createElement('div');
-                        c.className = `absolute top-2 right-2 w-6 h-6 rounded-full border-2 flex items-center justify-center z-10 ${state.selectedIds.has(p.id)?'bg-blue-500 border-blue-500':'bg-black/50 border-white'}`;
+                        const c = document.createElement('div'); c.className = `absolute top-2 right-2 w-6 h-6 rounded-full border-2 flex items-center justify-center z-10 ${state.selectedIds.has(p.id)?'bg-blue-500 border-blue-500':'bg-black/50 border-white'}`;
                         if(state.selectedIds.has(p.id)) c.innerHTML = `<svg class="w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>`;
                         div.appendChild(c);
                     }
-                    div.appendChild(img);
-                    div.onclick = () => handlePhotoClick(p.id);
-                    ui.gallery.appendChild(div);
+                    div.appendChild(img); div.onclick = () => handlePhotoClick(p.id); ui.gallery.appendChild(div);
                 });
             }
         }
-
-        function handlePhotoClick(id) {
-            if (state.isSelectMode) {
-                if(state.selectedIds.has(id)) state.selectedIds.delete(id); else state.selectedIds.add(id);
-                renderGallery();
-            } else {
-                openEditor(id);
-            }
-        }
-
+        function handlePhotoClick(id) { if (state.isSelectMode) { if(state.selectedIds.has(id)) state.selectedIds.delete(id); else state.selectedIds.add(id); renderGallery(); } else openEditor(id); }
         function openEditor(id) {
-            const p = state.photos.find(ph => ph.id === id);
-            if (!p) return;
-            state.editingId = id;
-            ui.previewImg.src = p.displayUrl;
-            ui.inputs.c1.value = p.captions.c1;
-            ui.inputs.c2.value = p.captions.c2;
-            ui.inputs.c3.value = p.captions.c3;
-            ui.inputs.meta.value = p.metaNote;
+            const p = state.photos.find(ph => ph.id === id); if (!p) return;
+            state.editingId = id; ui.previewImg.src = p.displayUrl;
+            ui.inputs.c1.value = p.captions.c1; ui.inputs.c2.value = p.captions.c2; ui.inputs.c3.value = p.captions.c3; ui.inputs.meta.value = p.metaNote;
             ui.previewModal.classList.remove('hidden');
         }
 
-        // --- Notes Logic (NEW) ---
-        async function addNote() {
-            const text = ui.newNoteInput.value.trim();
-            if (!text) return;
-            const note = {
-                id: Date.now(), text: text, timestamp: new Date().toLocaleString(),
-                location: state.currentLocation, projectId: state.projectId
-            };
-            await DB.add('notes', note);
-            ui.newNoteInput.value = '';
-            renderNotes();
-        }
-
+        async function addNote() { const text = ui.newNoteInput.value.trim(); if (!text) return; const note = { id: Date.now(), text: text, timestamp: new Date().toLocaleString(), location: state.currentLocation, projectId: state.projectId }; await DB.add('notes', note); ui.newNoteInput.value = ''; renderNotes(); }
         async function renderNotes() {
-            const notes = await DB.getAll('notes');
-            ui.notesList.innerHTML = '';
-            if (!notes || notes.length === 0) {
-                ui.notesList.innerHTML = `<div class="text-center text-gray-500 mt-10 text-sm">No notes recorded yet.</div>`;
-                return;
-            }
+            const notes = await DB.getAll('notes'); ui.notesList.innerHTML = '';
+            if (!notes || notes.length === 0) { ui.notesList.innerHTML = `<div class="text-center text-gray-500 mt-10 text-sm">No notes recorded yet.</div>`; return; }
             notes.sort((a,b) => b.id - a.id).forEach(n => {
-                const el = document.createElement('div');
-                el.className = 'bg-gray-800 p-3 rounded-lg border border-gray-700 shadow-sm';
-                el.innerHTML = `
-                    <div class="flex justify-between items-start mb-1">
-                        <span class="text-[10px] text-gray-400 font-mono">${n.timestamp}</span>
-                        <button class="text-red-400 hover:text-red-300 text-xs font-bold" onclick="deleteNote(${n.id})">×</button>
-                    </div>
-                    <div class="text-sm text-white whitespace-pre-wrap">${n.text}</div>
-                    <div class="mt-2 flex gap-2 text-[10px] text-gray-500">
-                        <span>📍 ${n.location}</span>
-                        ${n.projectId ? `<span>📁 ${n.projectId}</span>` : ''}
-                    </div>
-                `;
+                const el = document.createElement('div'); el.className = 'bg-gray-800 p-3 rounded-lg border border-gray-700 shadow-sm';
+                el.innerHTML = `<div class="flex justify-between items-start mb-1"><span class="text-[10px] text-gray-400 font-mono">${n.timestamp}</span><button class="text-red-400 hover:text-red-300 text-xs font-bold" onclick="deleteNote(${n.id})">×</button></div><div class="text-sm text-white whitespace-pre-wrap">${n.text}</div><div class="mt-2 flex gap-2 text-[10px] text-gray-500"><span>📍 ${n.location}</span>${n.projectId ? `<span>📁 ${n.projectId}</span>` : ''}</div>`;
                 ui.notesList.appendChild(el);
             });
         }
         window.deleteNote = async (id) => { if(confirm("Delete note?")) { await DB.delete('notes', id); renderNotes(); } };
-
         async function exportNotes() {
-            const notes = await DB.getAll('notes');
-            if (!notes || notes.length === 0) return alert("No notes to export.");
-            let csv = "\ufeffTimestamp,Project,Location,Note\n";
-            const safe = s => `"${(s||"").replace(/"/g,'""')}"`;
+            const notes = await DB.getAll('notes'); if (!notes || notes.length === 0) return alert("No notes");
+            let csv = "\ufeffTimestamp,Project,Location,Note\n"; const safe = s => `"${(s||"").replace(/"/g,'""')}"`;
             notes.forEach(n => { csv += `${safe(n.timestamp)},${safe(n.projectId)},${safe(n.location)},${safe(n.text)}\n`; });
-            const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-            saveAs(blob, `Field_Notes_${new Date().toISOString().slice(0,10)}.csv`);
+            saveAs(new Blob([csv], { type: "text/csv;charset=utf-8" }), `Field_Notes_${new Date().toISOString().slice(0,10)}.csv`);
         }
 
         // --- Common / Wiring ---
+        // V7 Persistence Fix: Ensure blobs are valid
         async function restoreSession() {
-            const saved = await DB.getAll('photos');
-            if (saved.length > 0) {
-                saved.sort((a,b) => b.id - a.id); state.photos = saved;
-                for (let p of state.photos) if(!p.displayUrl && p.finalBlob) p.displayUrl = URL.createObjectURL(p.finalBlob);
-                renderGallery();
-            } else renderGallery();
-            renderNotes(); // Init notes view too
+            try {
+                const saved = await DB.getAll('photos');
+                if (saved.length > 0) {
+                    saved.sort((a,b) => b.id - a.id); 
+                    state.photos = saved;
+                    for (let p of state.photos) {
+                        if(!p.displayUrl && p.finalBlob) {
+                            if (p.finalBlob instanceof Blob) {
+                                p.displayUrl = URL.createObjectURL(p.finalBlob);
+                            } else {
+                                console.warn("Corrupt blob found for photo", p.id);
+                                // Fallback: try original blob if valid, or mark error
+                                if(p.originalBlob instanceof Blob) {
+                                    // re-process?
+                                    // for now just skip
+                                }
+                            }
+                        }
+                    }
+                    renderGallery();
+                } else renderGallery();
+                renderNotes();
+            } catch(e) { console.error("Restore failed", e); renderGallery(); }
         }
 
-        // Event Listeners
-        ui.snapBtn.onclick = capturePhoto;
-        ui.addNoteBtn.onclick = addNote;
-        ui.exportNotesBtn.onclick = exportNotes;
-        ui.saveBtn.onclick = async () => {
-            if (!state.editingId) return;
-            setProcessing(true, "Saving..."); await new Promise(r => setTimeout(r, 50));
-            try {
-                const p = state.photos.find(ph => ph.id === state.editingId);
-                p.captions.c1 = ui.inputs.c1.value; p.captions.c2 = ui.inputs.c2.value; p.captions.c3 = ui.inputs.c3.value; p.metaNote = ui.inputs.meta.value;
-                await processPhotoVisuals(p); await DB.add('photos', p); renderGallery(); ui.previewModal.classList.add('hidden');
-            } catch(e) { alert("Error: "+e.message); } finally { setProcessing(false); }
+        // --- New Visit Logic ---
+        ui.newVisitBtn.onclick = async () => {
+            if (confirm("Start a new site visit?\n\nThis will DELETE ALL current photos and notes from the device to prepare for a new inspection.\n\nMake sure you have downloaded your data first!")) {
+                setProcessing(true, "Resetting...");
+                try {
+                    await DB.clear('photos');
+                    await DB.clear('notes');
+                    state.photos = [];
+                    state.notes = [];
+                    state.selectedIds.clear();
+                    renderGallery();
+                    renderNotes();
+                    alert("Ready for new visit.");
+                } catch(e) {
+                    console.error(e);
+                    alert("Error resetting database.");
+                } finally {
+                    setProcessing(false);
+                }
+            }
         };
+
+        ui.navCamera.onclick = () => switchModule('camera'); ui.navNotes.onclick = () => switchModule('notes');
+        ui.snapBtn.onclick = capturePhoto; ui.addNoteBtn.onclick = addNote; ui.exportNotesBtn.onclick = exportNotes;
+        ui.saveBtn.onclick = async () => { if (!state.editingId) return; setProcessing(true, "Saving..."); await new Promise(r => setTimeout(r, 50)); try { const p = state.photos.find(ph => ph.id === state.editingId); p.captions.c1 = ui.inputs.c1.value; p.captions.c2 = ui.inputs.c2.value; p.captions.c3 = ui.inputs.c3.value; p.metaNote = ui.inputs.meta.value; await processPhotoVisuals(p); await DB.add('photos', p); renderGallery(); ui.previewModal.classList.add('hidden'); } catch(e) { alert("Error: "+e.message); } finally { setProcessing(false); } };
         ui.closeBtn.onclick = () => ui.previewModal.classList.add('hidden');
         ui.toggleSelect.onclick = () => { state.isSelectMode = !state.isSelectMode; state.selectedIds.clear(); ui.groupActions.classList.toggle('hidden'); ui.galleryHeader.classList.toggle('hidden'); renderGallery(); };
         ui.cancelSelect.onclick = ui.toggleSelect.onclick;
-        
-        // Batch Apply
-        ui.applyGroup.onclick = async () => {
-            const [c1, c2, c3, n] = ui.groupInputs.map(i => i.value);
-            if(!c1 && !c2 && !c3 && !n) return;
-            setProcessing(true, "Batching..."); await new Promise(r => setTimeout(r, 50));
-            for (const id of state.selectedIds) {
-                const p = state.photos.find(ph => ph.id === id);
-                if(p) {
-                    if(c1) p.captions.c1 = c1; if(c2) p.captions.c2 = c2; if(c3) p.captions.c3 = c3; if(n) p.metaNote = n;
-                    await processPhotoVisuals(p); await DB.add('photos', p);
-                }
-            }
-            setProcessing(false); ui.toggleSelect.click();
-        };
-
-        // Downloads & Deletes
-        ui.downloadAll.onclick = () => downloadZip(null);
-        ui.downloadSelected.onclick = () => downloadZip(state.selectedIds);
+        ui.applyGroup.onclick = async () => { const [c1, c2, c3, n] = ui.groupInputs.map(i => i.value); if(!c1 && !c2 && !c3 && !n) return; setProcessing(true, "Batching..."); await new Promise(r => setTimeout(r, 50)); for (const id of state.selectedIds) { const p = state.photos.find(ph => ph.id === id); if(p) { if(c1) p.captions.c1 = c1; if(c2) p.captions.c2 = c2; if(c3) p.captions.c3 = c3; if(n) p.metaNote = n; await processPhotoVisuals(p); await DB.add('photos', p); } } setProcessing(false); ui.toggleSelect.click(); };
+        ui.downloadAll.onclick = () => downloadZip(null); ui.downloadSelected.onclick = () => downloadZip(state.selectedIds);
         ui.deleteSelected.onclick = async () => { if(confirm("Delete selected?")) { for(let id of state.selectedIds) await DB.delete('photos', id); state.photos = state.photos.filter(p=>!state.selectedIds.has(p.id)); renderGallery(); ui.toggleSelect.click(); } };
         ui.deleteSingleBtn.onclick = async () => { if(confirm("Delete?")) { await DB.delete('photos', state.editingId); state.photos = state.photos.filter(p=>p.id!==state.editingId); ui.previewModal.classList.add('hidden'); renderGallery(); } };
-        ui.downloadSingleBtn.onclick = async () => { 
-            const p = state.photos.find(ph => ph.id === state.editingId);
-            if(p) {
-                // inject exif re-implementation locally or helper
-                // We use helper function below
-                saveAs(await injectExif(p.finalBlob, p), `IMG_${p.id}.jpg`);
-            }
-        };
+        ui.downloadSingleBtn.onclick = async () => { const p = state.photos.find(ph => ph.id === state.editingId); if(p) saveAs(await injectExif(p.finalBlob, p), `IMG_${p.id}.jpg`); };
 
         async function downloadZip(subset) {
             if (typeof JSZip === 'undefined') return alert("Lib missing");
@@ -596,9 +528,7 @@
             });
         }
 
-        window.onload = () => {
-            initProjectSettings(); initCamera(); initLocation(); setupDictation(); restoreSession();
-        };
+        window.onload = () => { initProjectSettings(); initCamera(); initLocation(); setupDictation(); restoreSession(); };
     </script>
 </body>
 </html>
