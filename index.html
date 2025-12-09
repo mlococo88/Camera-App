@@ -46,6 +46,11 @@
         .flash-overlay { position: absolute; inset: 0; background: white; pointer-events: none; opacity: 0; z-index: 20; }
         .animate-flash { animation: flash 0.3s ease-out; }
         .nav-active { color: #60a5fa; border-top: 2px solid #60a5fa; }
+        
+        /* Fix for iOS Notch on Modal Headers */
+        .safe-top-padding {
+            padding-top: calc(env(safe-area-inset-top) + 1rem);
+        }
     </style>
 </head>
 <body class="bg-gray-900 text-white flex flex-col overflow-hidden">
@@ -200,7 +205,7 @@
     <div id="processing-overlay" class="absolute inset-0 z-50 bg-black/80 flex flex-col items-center justify-center hidden backdrop-blur-sm"><div class="loader mb-4"></div><p id="processing-text" class="text-white font-semibold">Processing...</p></div>
 
     <div id="preview-modal" class="fixed inset-0 z-50 bg-black/95 hidden flex flex-col">
-        <div class="flex justify-between items-center p-4 bg-gray-900 border-b border-gray-800 shrink-0">
+        <div class="flex justify-between items-center p-4 bg-gray-900 border-b border-gray-800 shrink-0 safe-top-padding">
             <button id="close-preview-btn" class="text-gray-400 p-2"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></button>
             <button id="save-photo-btn" class="text-blue-400 font-bold text-sm px-2">Save</button>
         </div>
