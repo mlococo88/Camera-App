@@ -328,14 +328,33 @@
         }
 
         // --- Weather & GPS ---
+        function getWeatherDesc(code) {
+            const c = {
+                0: "Sunny", 1: "Mainly Sunny", 2: "Partly Cloudy", 3: "Overcast",
+                45: "Fog", 48: "Rime Fog",
+                51: "Light Drizzle", 53: "Drizzle", 55: "Heavy Drizzle",
+                56: "Freezing Drizzle", 57: "Freezing Drizzle",
+                61: "Light Rain", 63: "Rain", 65: "Heavy Rain",
+                66: "Freezing Rain", 67: "Freezing Rain",
+                71: "Light Snow", 73: "Snow", 75: "Heavy Snow",
+                77: "Snow Grains",
+                80: "Rain Showers", 81: "Rain Showers", 82: "Violent Showers",
+                85: "Snow Showers", 86: "Snow Showers",
+                95: "Thunderstorm", 96: "Thunderstorm", 99: "Thunderstorm"
+            };
+            return c[code] || "";
+        }
+
         async function fetchWeather(lat, lon) {
             try {
-                const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`);
+                // Added &temperature_unit=fahrenheit
+                const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&temperature_unit=fahrenheit`);
                 const d = await r.json();
                 if (d.current_weather) {
-                    const { temperature, windspeed } = d.current_weather;
-                    state.weather = `${temperature}°C, Wind ${windspeed}km/h`;
-                    ui.weatherStatus.innerText = `⛅ ${temperature}°`;
+                    const { temperature, weathercode } = d.current_weather;
+                    const desc = getWeatherDesc(weathercode);
+                    state.weather = `${temperature}°F, ${desc}`;
+                    ui.weatherStatus.innerText = `${temperature}°F ${desc}`;
                 }
             } catch(e) { console.log("Weather fail", e); }
         }
