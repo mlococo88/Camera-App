@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Field Cam">
-    <title>Field Cam Pro (v3)</title>
+    <title>Field Cam Pro (v3.1)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -158,7 +158,7 @@
                 
                 <div>
                     <label class="block text-xs text-gray-400 mb-1">Inspector / Author</label>
-                    <input type="text" id="set-author" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-600 text-sm" placeholder="e.g. John Doe, PE">
+                    <input type="text" id="set-author" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-600 text-sm" placeholder="e.g. Mario LoCoco, P.E.">
                 </div>
 
                 <div class="grid grid-cols-2 gap-3">
@@ -366,7 +366,7 @@
             // SETTINGS STATE
             settings: {
                 projectId: localStorage.getItem('fc_pid') || "",
-                author: localStorage.getItem('fc_auth') || "",
+                author: localStorage.getItem('fc_auth') || "Mario LoCoco, P.E.",
                 defC1: localStorage.getItem('fc_c1') || "",
                 defC2: localStorage.getItem('fc_c2') || "",
                 defC3: localStorage.getItem('fc_c3') || "",
@@ -394,7 +394,7 @@
             gpsStatus: document.getElementById('gps-status-label'), weatherStatus: document.getElementById('weather-status'), compassOverlay: document.getElementById('compass-overlay'), compassText: document.getElementById('compass-text'),
             // Settings Elements
             projectModal: document.getElementById('project-modal'), projectBtn: document.getElementById('project-settings-btn'), closeSettingsBtn: document.getElementById('close-settings-btn'),
-            saveProjectBtn: document.getElementById('save-project-btn'), enableCompassBtn: document.getElementById('enable-sensors-btn'),
+            saveProjectBtn: document.getElementById('save-settings-btn'), enableCompassBtn: document.getElementById('enable-sensors-btn'),
             backupBtn: document.getElementById('backup-btn'), restoreBtn: document.getElementById('restore-btn'), restoreInput: document.getElementById('restore-input'),
             // Inputs
             sPid: document.getElementById('set-proj-id'), sAuth: document.getElementById('set-author'), sNum: document.getElementById('set-next-num'),
