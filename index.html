@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Field Cam">
-    <title>Field Cam Pro (v4.9 iPhone Fix)</title>
+    <title>Field Cam Pro (Native Fix)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -42,9 +42,7 @@
         
         .loader { border: 4px solid #f3f3f3; border-top: 4px solid #3b82f6; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        @keyframes flash { 0% { opacity: 1; } 100% { opacity: 0; } }
-        .flash-overlay { position: absolute; inset: 0; background: white; pointer-events: none; opacity: 0; z-index: 20; }
-        .animate-flash { animation: flash 0.3s ease-out; }
+        
         .nav-active { color: #60a5fa; border-top: 2px solid #60a5fa; }
         .safe-top-padding { padding-top: calc(env(safe-area-inset-top) + 1rem); }
         
@@ -91,47 +89,49 @@
         </div>
     </header>
 
-    <!-- MODULE 1: CAMERA -->
+    <!-- MODULE 1: CAMERA (Redesigned for Native Only) -->
     <section id="module-camera" class="flex-1 flex flex-col md:flex-row overflow-hidden relative">
-        <div id="camera-container" class="relative h-[45%] md:h-full md:flex-1 flex flex-col items-center justify-center bg-black overflow-hidden bg-gray-900">
-            <!-- Video for Stream Mode -->
-            <video id="video" autoplay playsinline muted class="w-full h-full object-cover"></video>
+        <!-- Changed height from 45% to 30% to give more room to gallery -->
+        <div id="camera-container" class="relative h-[30%] md:h-full md:flex-1 flex flex-col items-center justify-center bg-gray-800 border-b border-gray-700">
             
-            <!-- Placeholder for Native Mode -->
-            <div id="native-mode-placeholder" class="hidden absolute inset-0 flex flex-col items-center justify-center bg-gray-900 text-gray-400 z-10 p-6 text-center">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mb-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                <h3 class="text-lg font-bold text-white mb-2">Native Camera Active</h3>
-                <p class="text-xs max-w-xs">Tap the shutter button below to launch your device's camera app for high-quality capture.</p>
-            </div>
+            <!-- Native Mode Control Center -->
+            <div id="native-mode-ui" class="absolute inset-0 flex flex-col items-center justify-center z-10 p-4">
+                
+                <!-- Compass Readout (Functional) -->
+                <div id="compass-display" class="absolute top-4 right-4 bg-black/30 px-3 py-1 rounded-full text-xs font-mono text-blue-300 border border-blue-500/20">
+                    <span id="compass-text">--°</span>
+                </div>
 
-            <canvas id="canvas" class="hidden"></canvas>
+                <!-- Main Shutter Button -->
+                <button id="snap" class="group flex flex-col items-center gap-3 active:scale-95 transition-transform">
+                    <div class="w-16 h-16 bg-blue-600 rounded-full border-4 border-gray-700 shadow-xl flex items-center justify-center group-hover:bg-blue-500 ring-4 ring-blue-500/20">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                    </div>
+                    <span class="text-xs font-bold text-gray-300 uppercase tracking-wide">Add Photo</span>
+                </button>
+
+                <!-- Series Mode Toggle -->
+                <button id="series-mode-btn" class="absolute bottom-4 right-6 flex items-center gap-2 bg-gray-700/50 hover:bg-gray-600 border border-gray-600 px-3 py-1.5 rounded-full transition-colors text-xs text-gray-300">
+                    <div class="w-2 h-2 rounded-full bg-gray-500" id="series-indicator"></div>
+                    <span class="font-semibold">Series</span>
+                </button>
+            </div>
             
             <!-- Hidden Input for Native Capture -->
             <input type="file" id="native-cam-input" accept="image/*" capture="environment" class="hidden">
-
+            
+            <!-- Video and Placeholder hidden but kept for logic -->
+            <video id="video" class="hidden"></video>
+            <div id="native-mode-placeholder" class="hidden"></div>
+            <button id="torch-btn" class="hidden"></button>
+            <canvas id="canvas" class="hidden"></canvas>
             <div id="flash-element" class="flash-overlay"></div>
-            <div id="compass-overlay" class="absolute top-4 right-4 bg-black/50 backdrop-blur px-2 py-1 rounded text-xs font-mono hidden pointer-events-none z-10"><span id="compass-text">--°</span></div>
-            
-            <!-- Torch -->
-            <button id="torch-btn" class="absolute top-4 left-4 p-3 bg-black/40 backdrop-blur rounded-full text-white border border-white/20 hidden z-10 hover:bg-black/60"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg></button>
-            
-            <!-- Series Mode Toggle -->
-            <button id="series-mode-btn" class="absolute bottom-6 right-6 md:right-10 p-3 bg-black/40 backdrop-blur rounded-full text-white border border-white/20 z-10 transition-colors hover:bg-black/60 flex flex-col items-center justify-center gap-1" title="Series Mode: Batch Caption">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                <span class="text-[8px] font-bold uppercase tracking-wider">Series</span>
-            </button>
-
-            <!-- Error -->
-            <div id="error-display" class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-red-600/90 text-white p-6 rounded-xl text-center hidden w-3/4 max-w-sm z-20 shadow-2xl"><h3 class="font-bold text-lg mb-2">System Error</h3><p id="error-msg" class="text-sm">Unable to access camera.</p><button onclick="location.reload()" class="mt-4 bg-white text-red-600 px-4 py-2 rounded font-bold text-sm">Retry</button></div>
-            
-            <!-- Shutter -->
-            <div class="absolute bottom-6 left-1/2 -translate-x-1/2 z-10"><button id="snap" class="w-20 h-20 bg-white rounded-full border-[6px] border-gray-300/50 shadow-xl active:scale-95 active:bg-gray-200 transition-all focus:outline-none ring-2 ring-blue-500/0 active:ring-blue-500"></button></div>
         </div>
 
-        <div id="gallery-panel" class="w-full h-[55%] md:h-full md:w-[400px] bg-gray-900 flex flex-col border-t border-gray-700 md:border-t-0 md:border-l shadow-2xl z-20">
+        <div id="gallery-panel" class="w-full h-[70%] md:h-full md:w-[400px] bg-gray-900 flex flex-col md:border-l shadow-2xl z-20">
             <div id="selection-toolbar" class="bg-gray-800 p-3 hidden flex-shrink-0 border-b border-gray-700">
                  <div class="flex justify-between items-center">
                      <div class="flex items-center gap-2"><button id="cancel-select-mode" class="text-gray-400 hover:text-white"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></button><span id="selection-count" class="text-sm font-bold text-white">0 Selected</span></div>
@@ -266,7 +266,7 @@
                 </div>
 
                 <div class="flex items-center justify-between">
-                    <span class="text-sm">Show Compass Overlay</span>
+                    <span class="text-sm">Show Compass (In Preview)</span>
                     <label class="relative inline-flex items-center cursor-pointer">
                         <input type="checkbox" id="set-compass-ui" class="sr-only peer" checked>
                         <div class="w-11 h-6 bg-gray-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 peer-checked:bg-blue-600"></div>
@@ -457,7 +457,7 @@
                 gpsFmt: localStorage.getItem('fc_gps') || "dec",
                 haptic: localStorage.getItem('fc_hap') !== "false",
                 camRes: localStorage.getItem('fc_camRes') || "max",
-                nativeCam: localStorage.getItem('fc_nativeCam') === "true" // Default FALSE for web app experience
+                nativeCam: true // Default TRUE for Native Mode
             }
         };
 
@@ -466,7 +466,7 @@
             navCamera: document.getElementById('nav-camera'), navNotes: document.getElementById('nav-notes'), navMap: document.getElementById('nav-map'),
             video: document.getElementById('video'), canvas: document.getElementById('canvas'), snapBtn: document.getElementById('snap'),
             gallery: document.getElementById('gallery'), galleryCount: document.getElementById('gallery-count'), locationText: document.getElementById('location-text'),
-            gpsStatus: document.getElementById('gps-status-label'), weatherStatus: document.getElementById('weather-status'), compassOverlay: document.getElementById('compass-overlay'), compassText: document.getElementById('compass-text'),
+            gpsStatus: document.getElementById('gps-status-label'), weatherStatus: document.getElementById('weather-status'), compassOverlay: document.getElementById('compass-display'), compassText: document.getElementById('compass-text'),
             // Settings Elements
             projectModal: document.getElementById('project-modal'), projectBtn: document.getElementById('project-settings-btn'), closeSettingsBtn: document.getElementById('close-settings-btn'),
             saveProjectBtn: document.getElementById('save-settings-btn'), enableCompassBtn: document.getElementById('enable-sensors-btn'),
@@ -499,7 +499,9 @@
             mapContainer: document.getElementById('map-container'), mapPhotoCount: document.getElementById('map-photo-count'),
             exportPdfBtn: document.getElementById('export-pdf-btn'), exportPdfGalleryBtn: document.getElementById('export-pdf-gallery-btn'),
             nativeInput: document.getElementById('native-cam-input'), nativePlaceholder: document.getElementById('native-mode-placeholder'),
-            seriesBtn: document.getElementById('series-mode-btn')
+            seriesBtn: document.getElementById('series-mode-btn'),
+            compassDisplay: document.getElementById('compass-display'),
+            seriesIndicator: document.getElementById('series-indicator')
         };
 
         // --- Helpers ---
@@ -587,45 +589,22 @@
         }
 
         async function initCamera() {
+            // Simplified for Native Mode Only
             if (!window.isSecureContext) console.warn("HTTPS likely required for Camera.");
-            if (state.videoStream) { state.videoStream.getTracks().forEach(track => track.stop()); state.videoStream = null; }
-
-            if (state.settings.nativeCam) {
-                ui.video.classList.add('hidden');
-                ui.nativePlaceholder.classList.remove('hidden');
-                ui.torchBtn.classList.add('hidden');
-                return;
-            } else {
-                ui.video.classList.remove('hidden');
-                ui.nativePlaceholder.classList.add('hidden');
-            }
-
-            const camRes = state.settings.camRes || 'max';
-            let widthConstraint = { ideal: 3840 }; // Max
-            if (camRes === 'high') widthConstraint = { ideal: 1920 };
-            if (camRes === 'med') widthConstraint = { ideal: 1280 };
-
-            try { 
-                const s = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: "environment" }, width: widthConstraint } }); 
-                ui.video.srcObject = s; state.videoStream = s; state.track = s.getVideoTracks()[0]; 
-                if ('ImageCapture' in window) try { state.imageCapture = new ImageCapture(state.track); state.nativeResSupported = true; } catch(e) {} 
-                const c = state.track.getCapabilities(); 
-                if(c.zoom) setupPinchZoom(state.track); 
-                if(c.torch) { ui.torchBtn.classList.remove('hidden'); ui.torchBtn.onclick=()=>{state.torchOn=!state.torchOn; state.track.applyConstraints({advanced:[{torch:state.torchOn}]});}; } 
-            } catch(e) { document.getElementById('error-display').classList.remove('hidden'); }
+            // No getUserMedia needed
+            ui.video.classList.add('hidden');
+            ui.nativePlaceholder.classList.remove('hidden');
+            if(ui.torchBtn) ui.torchBtn.classList.add('hidden');
         }
 
-        function setupPinchZoom(track) {
-            const settings = { min: track.getCapabilities().zoom.min, max: track.getCapabilities().zoom.max, step: track.getCapabilities().zoom.step, current: track.getSettings().zoom || 1 };
-            let startDist = 0, startZoom = 0; const getDist = (t) => Math.hypot(t[0].pageX - t[1].pageX, t[0].pageY - t[1].pageY);
-            ui.cameraContainer.addEventListener('touchstart', (e) => { if (e.touches.length === 2) { e.preventDefault(); startDist = getDist(e.touches); startZoom = settings.current; } }, { passive: false });
-            ui.cameraContainer.addEventListener('touchmove', (e) => { if (e.touches.length === 2) { e.preventDefault(); const dist = getDist(e.touches); if (startDist > 0) { const ratio = dist / startDist; let newZoom = Math.min(Math.max(startZoom * ratio, settings.min), settings.max); if (Math.abs(newZoom - settings.current) >= settings.step) { track.applyConstraints({ advanced: [{ zoom: newZoom }] }).catch(()=>{}); settings.current = newZoom; } } } }, { passive: false });
-        }
+        // setupPinchZoom removed as it applied to the now-removed video element
 
         function initProjectSettings() {
             updateProjectDisplay();
             updateUnitUI();
-            ui.compassOverlay.classList.toggle('hidden', !state.settings.compassUi);
+            if (ui.compassOverlay) {
+                ui.compassOverlay.classList.toggle('hidden', !state.settings.compassUi);
+            }
             if(ui.enableCompassBtn) ui.enableCompassBtn.onclick = enableCompass;
         }
 
@@ -873,8 +852,7 @@
             ui.sBurn.checked = state.settings.burnIn;
             ui.sFont.value = state.settings.fontScale;
             ui.sJpeg.value = state.settings.jpegQ;
-            ui.sRes.value = state.settings.camRes;
-            ui.sNative.checked = state.settings.nativeCam;
+            // Native UI Specifics removed from load
             ui.sComp.checked = state.settings.compassUi;
             ui.sRTitle.value = state.settings.reportTitle;
             ui.sPlay.value = state.settings.pdfLayout;
@@ -895,8 +873,7 @@
             state.settings.burnIn = ui.sBurn.checked;
             state.settings.fontScale = parseInt(ui.sFont.value);
             state.settings.jpegQ = parseFloat(ui.sJpeg.value);
-            state.settings.camRes = ui.sRes.value;
-            state.settings.nativeCam = ui.sNative.checked;
+            // Native UI Specifics removed from save
             state.settings.compassUi = ui.sComp.checked;
             state.settings.reportTitle = ui.sRTitle.value;
             state.settings.pdfLayout = parseInt(ui.sPlay.value);
@@ -916,8 +893,6 @@
             localStorage.setItem('fc_burn', state.settings.burnIn);
             localStorage.setItem('fc_font', state.settings.fontScale);
             localStorage.setItem('fc_jq', state.settings.jpegQ);
-            localStorage.setItem('fc_camRes', state.settings.camRes);
-            localStorage.setItem('fc_nativeCam', state.settings.nativeCam);
             localStorage.setItem('fc_comp', state.settings.compassUi);
             localStorage.setItem('fc_rt', state.settings.reportTitle);
             localStorage.setItem('fc_play', state.settings.pdfLayout);
@@ -929,7 +904,6 @@
 
             ui.projectModal.classList.add('hidden');
             initProjectSettings(); // Update visual state
-            initCamera(); // Restart camera if resolution/native changed
         }
 
         // ==========================================
@@ -994,15 +968,8 @@
         }
 
         async function capturePhoto() {
-            if (state.settings.nativeCam) { ui.nativeInput.click(); return; }
-            if (state.isProcessing) return; setProcessing(true, "Capturing..."); triggerFlash();
-            if(state.settings.haptic && navigator.vibrate) navigator.vibrate(50);
-            try {
-                let blob;
-                if (state.nativeResSupported && state.imageCapture) try { blob = await state.imageCapture.takePhoto(); } catch (e) {}
-                if (!blob) { ui.canvas.width = ui.video.videoWidth; ui.canvas.height = ui.video.videoHeight; ui.canvas.getContext('2d').drawImage(ui.video, 0, 0); blob = await new Promise(r => ui.canvas.toBlob(r, 'image/jpeg', 0.95)); }
-                await handleCapturedBlob(blob);
-            } catch (err) { alert("Failed capture: " + err); } finally { setProcessing(false); }
+            // Simplified capturePhoto just triggers native input
+            ui.nativeInput.click();
         }
 
         async function createPDFDoc(photos, notes) {
@@ -1138,7 +1105,8 @@
                     
                     // UI Updates
                     ui.seriesBtn.classList.add('bg-green-600/80', 'border-green-400', 'text-green-100');
-                    ui.seriesBtn.classList.remove('bg-black/40', 'border-white/20');
+                    ui.seriesBtn.classList.remove('bg-gray-700/50', 'border-gray-600');
+                    ui.seriesIndicator.classList.add('bg-green-400', 'animate-pulse');
                     if(navigator.vibrate) navigator.vibrate([50, 50, 50]);
                     
                     // Re-render gallery (to ensure no lingering highlights)
@@ -1149,7 +1117,8 @@
                     
                     // UI Updates
                     ui.seriesBtn.classList.remove('bg-green-600/80', 'border-green-400', 'text-green-100');
-                    ui.seriesBtn.classList.add('bg-black/40', 'border-white/20');
+                    ui.seriesBtn.classList.add('bg-gray-700/50', 'border-gray-600');
+                    ui.seriesIndicator.classList.remove('bg-green-400', 'animate-pulse');
                     if(navigator.vibrate) navigator.vibrate(50);
 
                     // Check if we captured anything
