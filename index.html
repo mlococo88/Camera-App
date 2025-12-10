@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Field Cam">
-    <title>Field Cam Pro (v3.6)</title>
+    <title>Field Cam Pro (v4.0)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -319,6 +319,13 @@
             <!-- Data Management -->
             <div class="bg-gray-800 rounded-lg p-4">
                 <h3 class="text-xs font-bold text-blue-400 uppercase tracking-wider mb-2">Data Management</h3>
+                
+                <!-- NEW Download Project Button -->
+                <button id="download-project-btn" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded mb-3 shadow-lg flex items-center justify-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                    Download Project (ZIP)
+                </button>
+
                 <div class="flex gap-2">
                     <button id="backup-btn" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-3 rounded">Backup JSON</button>
                     <button id="restore-btn" class="flex-1 bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold py-3 rounded">Restore JSON</button>
@@ -431,6 +438,7 @@
             projectModal: document.getElementById('project-modal'), projectBtn: document.getElementById('project-settings-btn'), closeSettingsBtn: document.getElementById('close-settings-btn'),
             saveProjectBtn: document.getElementById('save-settings-btn'), enableCompassBtn: document.getElementById('enable-sensors-btn'),
             backupBtn: document.getElementById('backup-btn'), restoreBtn: document.getElementById('restore-btn'), restoreInput: document.getElementById('restore-input'),
+            downloadProjectBtn: document.getElementById('download-project-btn'), // NEW BUTTON
             // Inputs
             sPid: document.getElementById('set-proj-id'), sAuth: document.getElementById('set-author'), sNum: document.getElementById('set-next-num'),
             sC1: document.getElementById('set-def-c1'), sC2: document.getElementById('set-def-c2'), sC3: document.getElementById('set-def-c3'),
@@ -461,7 +469,7 @@
         // --- Helpers ---
         function setProcessing(active, msg="Processing...") { state.isProcessing = active; ui.processingText.textContent = msg; ui.processing.classList.toggle('hidden', !active); document.getElementById('snap').disabled = active; }
         function triggerFlash() { ui.flash.classList.remove('animate-flash'); void ui.flash.offsetWidth; ui.flash.classList.add('animate-flash'); }
-        async function prepPhotoForSave(p) { const b = await p.finalBlob.arrayBuffer(); const s = {...p}; delete s.originalBlob; delete s.displayUrl; delete s.finalBlob; s.finalBuffer = b; return s; }
+        async function prepPhotoForSave(p) { const b = await blobToBuffer(p.finalBlob); const s = {...p}; delete s.originalBlob; delete s.displayUrl; delete s.finalBlob; s.finalBuffer = b; return s; }
         function createImageFromBlob(b) { return new Promise(r => { const u = URL.createObjectURL(b); const i = new Image(); i.onload = () => { URL.revokeObjectURL(u); r(i); }; i.src = u; }); }
         function formatGPS(lat, lon) {
             if (!lat || !lon) return "No GPS";
@@ -476,7 +484,19 @@
            return { w: imgW * ratio, h: imgH * ratio };
         }
 
-        // --- UI Rendering (IMPLEMENTED) ---
+        // New helper for safe blob/buffer conversion
+        function blobToBuffer(blob) {
+            if (!blob) return Promise.resolve(null);
+            if (typeof blob.arrayBuffer === 'function') return blob.arrayBuffer();
+            return new Promise((resolve, reject) => {
+                const fr = new FileReader();
+                fr.onload = () => resolve(fr.result);
+                fr.onerror = reject;
+                fr.readAsArrayBuffer(blob);
+            });
+        }
+
+        // --- UI Rendering ---
         function renderGallery() {
             ui.gallery.innerHTML = '';
             ui.galleryCount.innerText = state.photos.length;
@@ -489,26 +509,20 @@
             state.photos.sort((a,b) => b.id - a.id).forEach(p => {
                 const el = document.createElement('div');
                 el.className = `grid-item-aspect bg-black rounded overflow-hidden cursor-pointer select-ring ${state.isSelectMode && state.selectedIds.has(p.id) ? 'selected-item' : ''}`;
-                // selection check mark
                 const check = document.createElement('div'); check.className = 'selection-check'; check.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>';
-                
                 const img = document.createElement('img');
                 img.src = p.displayUrl;
                 
                 el.appendChild(img);
                 el.appendChild(check);
-                
-                // Interactions
                 el.onmousedown = () => startLongPress(p.id);
                 el.ontouchstart = () => startLongPress(p.id);
                 el.onmouseup = cancelLongPress;
                 el.ontouchend = cancelLongPress;
                 el.onclick = (e) => {
-                    // Prevent click if long press triggered
                     if(state.longPressTriggered) { state.longPressTriggered=false; return; }
                     handlePhotoClick(p.id);
                 }
-                
                 ui.gallery.appendChild(el);
             });
         }
@@ -540,12 +554,11 @@
             state.notes = state.notes.filter(n => n.id !== id);
             renderNotes();
         }
-        window.deleteNote = deleteNote; // Expose to global scope for HTML onclick
+        window.deleteNote = deleteNote; 
 
         async function saveNote() {
             const text = ui.newNoteInput.value.trim();
             if (!text) return;
-            
             const note = {
                 id: Date.now(),
                 text: text,
@@ -553,7 +566,6 @@
                 location: state.currentLocation,
                 projectId: state.settings.projectId
             };
-            
             await DB.add('notes', note);
             state.notes.unshift(note);
             renderNotes();
@@ -580,52 +592,39 @@
             document.body.removeChild(link);
         }
 
-        // --- Interaction Logic (IMPLEMENTED) ---
+        // --- Interaction Logic ---
         function openEditor(id) {
             const p = state.photos.find(x => x.id === id);
             if (!p) return;
-            
             state.editingId = id;
             ui.previewImg.src = p.displayUrl;
-            
             ui.inputs.c1.value = p.captions.c1 || "";
             ui.inputs.c2.value = p.captions.c2 || "";
             ui.inputs.c3.value = p.captions.c3 || "";
             ui.inputs.meta.value = p.metaNote || "";
-            
             ui.previewModal.classList.remove('hidden');
         }
 
         async function downloadZip(idSet) {
             setProcessing(true, "Zipping...");
             const zip = new JSZip();
-            const targets = idSet 
-                ? state.photos.filter(p => idSet.has(p.id)) 
-                : state.photos;
-            
+            const targets = idSet ? state.photos.filter(p => idSet.has(p.id)) : state.photos;
             if (targets.length === 0) {
                 setProcessing(false);
                 return alert("No photos to download.");
             }
-
-            // Generate metadata CSV
             let csv = "Filename,Date,Lat,Lon,Direction,Note,Cap1,Cap2,Cap3\n";
-            
             for (const p of targets) {
-                // Ensure we have the blob (if coming from storage)
                 let blob = p.finalBlob;
                 if (!blob && p.finalBuffer) {
                     blob = new Blob([p.finalBuffer], {type: 'image/jpeg'});
                 }
-                
                 if (blob) {
                     zip.file(`IMG_${p.photoNumber}_${p.id}.jpg`, blob);
                     csv += `IMG_${p.photoNumber}_${p.id}.jpg,"${p.timestamp}",${p.lat},${p.lon},"${p.compass}","${(p.metaNote||"").replace(/"/g,'""')}","${p.captions.c1}","${p.captions.c2}","${p.captions.c3}"\n`;
                 }
             }
-            
             zip.file("metadata.csv", csv);
-
             try {
                 const content = await zip.generateAsync({type:"blob"});
                 saveAs(content, `FieldCam_Export_${Date.now()}.zip`);
@@ -639,36 +638,28 @@
 
         function setupDictation() {
             if (!('webkitSpeechRecognition' in window)) {
-                // Hide mic buttons if unsupported
                 Object.values(ui.micBtns).forEach(b => b.style.display = 'none');
                 return;
             }
-
             const setupMic = (btn, targetInput) => {
                 btn.onclick = () => {
                     const recognition = new webkitSpeechRecognition();
                     recognition.continuous = false;
                     recognition.interimResults = false;
                     recognition.lang = 'en-US';
-                    
                     btn.classList.add('text-red-500', 'animate-pulse');
-                    
                     recognition.onresult = (e) => {
                         const txt = e.results[0][0].transcript;
-                        // Append or Set? Let's append if there is text
                         targetInput.value = targetInput.value ? targetInput.value + " " + txt : txt;
                     };
-                    
                     recognition.onend = () => {
                         btn.classList.remove('text-red-500', 'animate-pulse');
                     };
-                    
                     recognition.start();
                 };
             };
-
             setupMic(ui.micBtns.single, ui.inputs.meta);
-            setupMic(ui.micBtns.group, ui.groupInputs[3]); // group notes input
+            setupMic(ui.micBtns.group, ui.groupInputs[3]); 
             setupMic(ui.micBtns.note, ui.newNoteInput);
         }
 
@@ -690,7 +681,6 @@
             const s = state.settings;
             const oldRes = s.camRes;
             const oldNative = s.nativeCam;
-            
             s.projectId = ui.sPid.value.trim(); s.author = ui.sAuth.value.trim(); s.nextNum = parseInt(ui.sNum.value) || 1;
             s.defC1 = ui.sC1.value.trim(); s.defC2 = ui.sC2.value.trim(); s.defC3 = ui.sC3.value.trim();
             s.burnIn = ui.sBurn.checked; s.fontScale = parseInt(ui.sFont.value); s.jpegQ = parseFloat(ui.sJpeg.value); s.compassUi = ui.sComp.checked;
@@ -699,15 +689,11 @@
             s.camRes = ui.sRes.value;
             s.nativeCam = ui.sNative.checked;
             
-            // Save to LocalStorage
             Object.keys(s).forEach(k => localStorage.setItem('fc_'+(k === 'projectId'?'pid':k === 'author'?'auth':k === 'nextNum'?'num':k==='defC1'?'c1':k==='defC2'?'c2':k==='defC3'?'c3':k==='burnIn'?'burn':k==='fontScale'?'font':k==='jpegQ'?'jq':k==='compassUi'?'comp':k==='reportTitle'?'rt':k==='pdfLayout'?'play':k==='pdfRes'?'pres':k==='incMap'?'imap':k==='incNotes'?'inotes':k==='tempUnit'?'unit':k==='gpsFmt'?'gps':k==='camRes'?'camRes':k==='nativeCam'?'nativeCam':'hap'), s[k]));
             
-            // Apply
             updateProjectDisplay();
             ui.compassOverlay.classList.toggle('hidden', !s.compassUi);
             ui.projectModal.classList.add('hidden');
-            
-            // Re-init camera if required
             if (oldRes !== s.camRes || oldNative !== s.nativeCam) {
                 initCamera();
             }
@@ -716,7 +702,6 @@
             if (state.settings.tempUnit === 'F') { ui.sUnitF.classList.add('bg-blue-600','text-white'); ui.sUnitC.classList.remove('bg-blue-600','text-white'); }
             else { ui.sUnitC.classList.add('bg-blue-600','text-white'); ui.sUnitF.classList.remove('bg-blue-600','text-white'); }
         }
-        // Safety checks for event listeners
         if(ui.sUnitF) ui.sUnitF.onclick = () => { state.settings.tempUnit = 'F'; updateUnitUI(); };
         if(ui.sUnitC) ui.sUnitC.onclick = () => { state.settings.tempUnit = 'C'; updateUnitUI(); };
         if(ui.projectBtn) ui.projectBtn.onclick = () => { loadSettingsUI(); ui.projectModal.classList.remove('hidden'); };
@@ -734,31 +719,25 @@
             else if (mod === 'map') { ui.modMap.classList.remove('hidden'); ui.navMap.classList.add('nav-active'); setTimeout(() => { if(!mapInstance) initMap(); mapInstance.invalidateSize(); renderMapMarkers(); }, 200); }
         }
         
-        // --- Capture & Processing ---
         async function capturePhoto() {
-            // Check native mode
             if (state.settings.nativeCam) {
                 ui.nativeInput.click();
                 return;
             }
-
             if (state.isProcessing) return; setProcessing(true, "Capturing..."); triggerFlash();
             if(state.settings.haptic && navigator.vibrate) navigator.vibrate(50);
             try {
                 let blob;
                 if (state.nativeResSupported && state.imageCapture) try { blob = await state.imageCapture.takePhoto(); } catch (e) {}
                 if (!blob) { ui.canvas.width = ui.video.videoWidth; ui.canvas.height = ui.video.videoHeight; ui.canvas.getContext('2d').drawImage(ui.video, 0, 0); blob = await new Promise(r => ui.canvas.toBlob(r, 'image/jpeg', 0.95)); }
-                
                 await handleCapturedBlob(blob);
             } catch (err) { alert("Failed capture: " + err); } finally { setProcessing(false); }
         }
 
-        // New helper to unify capture path
         async function handleCapturedBlob(blob) {
             const currentNum = state.settings.nextNum;
             state.settings.nextNum++;
             localStorage.setItem('fc_num', state.settings.nextNum); 
-
             const photo = { 
                 id: Date.now(), originalBlob: blob, displayUrl: null, 
                 captions: { c1: state.settings.defC1, c2: state.settings.defC2, c3: state.settings.defC3 }, metaNote: "", 
@@ -776,7 +755,6 @@
             openEditor(photo.id);
         }
 
-        // Handle Native Input Change
         ui.nativeInput.onchange = async (e) => {
             if (e.target.files && e.target.files[0]) {
                 setProcessing(true, "Processing Native Photo...");
@@ -786,7 +764,7 @@
                     alert("Error processing native photo: " + e.message);
                 } finally {
                     setProcessing(false);
-                    ui.nativeInput.value = ''; // Reset for next capture
+                    ui.nativeInput.value = ''; 
                 }
             }
         };
@@ -795,150 +773,205 @@
             const img = await createImageFromBlob(p.originalBlob || p.finalBlob);
             const cvs = document.createElement('canvas'); cvs.width = img.width; cvs.height = img.height; const ctx = cvs.getContext('2d');
             ctx.drawImage(img, 0, 0);
-            
-            // Check Setting: Burn In
             if (state.settings.burnIn) {
                 const H = cvs.height; const W = cvs.width; 
-                const fs = Math.floor(H / state.settings.fontScale); // Use Setting
+                const fs = Math.floor(H / state.settings.fontScale); 
                 const pad = Math.floor(fs / 2);
                 ctx.font = `bold ${fs}px Arial, sans-serif`; ctx.fillStyle = '#ffffff'; ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 4; ctx.strokeStyle = '#000000'; ctx.lineWidth = fs / 10; ctx.textBaseline = 'bottom';
                 const dt = (t, x, y, a='left') => { if(!t) return; ctx.textAlign=a; ctx.strokeText(t,x,y); ctx.fillText(t,x,y); };
-                
                 let cY = H - pad; [p.captions.c3, p.captions.c2, p.captions.c1].forEach(t => { if(t){ dt(t, pad, cY); cY -= (fs*1.2); }});
                 ctx.font = `bold ${Math.floor(fs*0.7)}px monospace`; let iY = H - pad; 
                 dt(p.location, W-pad, iY, 'right'); iY -= (fs*0.9); dt(p.timestamp, W-pad, iY, 'right');
-                
                 ctx.textBaseline = 'top'; 
                 let tY = pad; if(p.projectId) { dt(p.projectId, pad, tY, 'left'); tY += (fs * 1.2); }
                 dt(`Photo No. ${p.photoNumber}`, pad, tY, 'left');
                 let rY = pad; if(p.compass) { dt(p.compass, W-pad, rY, 'right'); rY += (fs*1.2); }
                 if(p.weather) { ctx.font = `bold ${Math.floor(fs*0.5)}px monospace`; dt(p.weather, W-pad, rY, 'right'); }
             }
-
             if (p.displayUrl) URL.revokeObjectURL(p.displayUrl);
-            const final = await new Promise(r => cvs.toBlob(r, 'image/jpeg', state.settings.jpegQ)); // Use Setting
+            const final = await new Promise(r => cvs.toBlob(r, 'image/jpeg', state.settings.jpegQ)); 
             p.finalBlob = final; p.displayUrl = URL.createObjectURL(final);
         }
 
-        // --- PDF Report ---
-        async function generatePDFReport() {
-            const { jsPDF } = window.jspdf; if (!jsPDF) return alert("PDF Lib Missing");
-            setProcessing(true, "Generating PDF..."); await new Promise(r => setTimeout(r, 100));
+        // --- PDF Report Generator (Extracted) ---
+        async function createPDFDoc(photos, notes) {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({ unit: 'mm', format: 'letter' });
+            const margin = 15; let y = margin; const pW = 215.9; const pH = 279.4;
+            
+            // Title Page
+            doc.setFontSize(22); doc.text(state.settings.reportTitle, pW/2, 40, null, null, "center");
+            doc.setFontSize(14); doc.text(`Project: ${state.settings.projectId || "N/A"}`, pW/2, 60, null, null, "center");
+            if(state.settings.author) doc.text(`Inspector: ${state.settings.author}`, pW/2, 68, null, null, "center");
+            doc.text(`Date: ${new Date().toLocaleDateString()}`, pW/2, 76, null, null, "center");
+            if (state.weather && state.settings.incMap) doc.text(`Weather: ${state.weather}`, pW/2, 90, null, null, "center");
 
-            try {
-                const doc = new jsPDF({ unit: 'mm', format: 'letter' });
-                const margin = 15; let y = margin; const pW = 215.9; const pH = 279.4;
+            // Notes
+            if (state.settings.incNotes && notes && notes.length > 0) {
+                doc.addPage(); y = margin; doc.setFontSize(16); doc.text("Field Observations", margin, y); y += 10; doc.setFontSize(11);
+                notes.sort((a,b) => a.id - b.id).forEach(n => {
+                    doc.setFont("helvetica", "bold"); doc.text(`${n.timestamp} | ${n.location}`, margin, y); y += 6;
+                    doc.setFont("helvetica", "normal"); const lines = doc.splitTextToSize(n.text, pW-(margin*2)); doc.text(lines, margin, y); y += (lines.length*6)+6;
+                    if (y > pH - margin) { doc.addPage(); y = margin; }
+                });
+            }
+
+            // Photos
+            if (photos && photos.length > 0) {
+                photos.sort((a,b) => a.id - b.id); doc.addPage(); y = margin; doc.setFontSize(16); doc.setFont("helvetica", "bold"); doc.text("Photo Log", margin, y); y += 15;
                 
-                // Title Page
-                doc.setFontSize(22); doc.text(state.settings.reportTitle, pW/2, 40, null, null, "center");
-                doc.setFontSize(14); doc.text(`Project: ${state.settings.projectId || "N/A"}`, pW/2, 60, null, null, "center");
-                if(state.settings.author) doc.text(`Inspector: ${state.settings.author}`, pW/2, 68, null, null, "center");
-                doc.text(`Date: ${new Date().toLocaleDateString()}`, pW/2, 76, null, null, "center");
-                if (state.weather && state.settings.incMap) doc.text(`Weather: ${state.weather}`, pW/2, 90, null, null, "center");
+                const layout = state.settings.pdfLayout; 
+                let slotW = 127; let slotH = 76.2; 
+                
+                if (layout === 1) { slotW = 170; slotH = 102; } 
+                else if (layout === 4) { slotW = 85; slotH = 51; }
 
-                // Notes
-                if (state.settings.incNotes) {
-                    const notes = await DB.getAll('notes');
-                    if (notes.length > 0) {
-                        doc.addPage(); y = margin; doc.setFontSize(16); doc.text("Field Observations", margin, y); y += 10; doc.setFontSize(11);
-                        notes.sort((a,b) => a.id - b.id).forEach(n => {
-                            doc.setFont("helvetica", "bold"); doc.text(`${n.timestamp} | ${n.location}`, margin, y); y += 6;
-                            doc.setFont("helvetica", "normal"); const lines = doc.splitTextToSize(n.text, pW-(margin*2)); doc.text(lines, margin, y); y += (lines.length*6)+6;
-                            if (y > pH - margin) { doc.addPage(); y = margin; }
-                        });
+                for (let i = 0; i < photos.length; i++) {
+                    const p = photos[i];
+                    let b;
+                    if (p.finalBuffer) b = new Blob([p.finalBuffer], {type: 'image/jpeg'});
+                    else if (p.finalBlob) b = p.finalBlob;
+                    else continue;
+
+                    const bmp = await createImageBitmap(b);
+                    const w = state.settings.pdfRes; 
+                    const h = (bmp.height / bmp.width) * w;
+                    const cvs = document.createElement('canvas'); cvs.width = w; cvs.height = h;
+                    cvs.getContext('2d').drawImage(bmp, 0, 0, w, h);
+                    const data = cvs.toDataURL('image/jpeg', 0.8);
+                    
+                    const dim = getAspectFit(bmp.width, bmp.height, slotW, slotH);
+                    const offX = (slotW - dim.w) / 2;
+                    const offY = (slotH - dim.h) / 2;
+
+                    if (layout === 4) {
+                        const col = i % 2; 
+                        const rowX = margin + (col * (slotW + 15));
+                        const isPageStart = i > 0 && i % 4 === 0;
+                        const isOutOfSpace = y + slotH + 30 > pH - margin;
+
+                        if (col === 0 && (isPageStart || isOutOfSpace)) { 
+                            doc.addPage(); y = margin; 
+                        }
+                        doc.addImage(data, 'JPEG', rowX + offX, y + offY, dim.w, dim.h);
+                        let capY = y + slotH + 5;
+                        doc.setFontSize(9); doc.setFont("helvetica", "bold");
+                        doc.text(`#${p.photoNumber} - ${p.timestamp}`, rowX, capY);
+                        doc.setFont("helvetica", "normal"); doc.setFontSize(8);
+                        const capText = [p.captions.c1, p.captions.c2].filter(Boolean).join(" | ");
+                        if (capText) doc.text(capText, rowX, capY+4);
+                        if (col === 1 || i === photos.length - 1) { y += slotH + 20; }
+                    } else {
+                        if (y + slotH + 25 > pH - margin) { doc.addPage(); y = margin; }
+                        const centerX = (pW - slotW) / 2;
+                        doc.addImage(data, 'JPEG', centerX + offX, y + offY, dim.w, dim.h);
+                        y += slotH + 5;
+                        doc.setFontSize(10); doc.setFont("helvetica", "bold");
+                        doc.text(`Photo #${p.photoNumber} - ${p.timestamp}`, margin, y); y += 5;
+                        doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+                        const cap = [p.captions.c1, p.captions.c2, p.captions.c3].filter(Boolean).join(" | ");
+                        if (cap) { doc.text(cap, margin, y); y += 5; }
+                        if (p.metaNote) { const nt = doc.splitTextToSize("Note: "+p.metaNote, pW-(margin*2)); doc.text(nt, margin, y); y += (nt.length*4); }
+                        y += 8;
                     }
                 }
+            }
+            return doc;
+        }
 
-                // Photos
+        async function generatePDFReport() {
+            if (!window.jspdf) return alert("PDF Lib Missing");
+            setProcessing(true, "Generating PDF..."); 
+            await new Promise(r => setTimeout(r, 100));
+            try {
                 const photos = await DB.getAll('photos');
-                if (photos.length > 0) {
-                    photos.sort((a,b) => a.id - b.id); doc.addPage(); y = margin; doc.setFontSize(16); doc.setFont("helvetica", "bold"); doc.text("Photo Log", margin, y); y += 15;
-                    
-                    const layout = state.settings.pdfLayout; // 1, 2, or 4
-                    let slotW = 127; let slotH = 76.2; // 2 photos default
-                    
-                    if (layout === 1) { slotW = 170; slotH = 102; } 
-                    else if (layout === 4) { slotW = 85; slotH = 51; }
-
-                    for (let i = 0; i < photos.length; i++) {
-                        const p = photos[i];
-                        // Process Image for PDF
-                        // FIX: Check for finalBuffer (DB) or finalBlob (Memory) - prevent crash if undefined
-                        let b;
-                        if (p.finalBuffer) {
-                            b = new Blob([p.finalBuffer], {type: 'image/jpeg'});
-                        } else if (p.finalBlob) {
-                            b = p.finalBlob;
-                        } else {
-                            continue; // Skip invalid
-                        }
-
-                        const bmp = await createImageBitmap(b);
-                        // Resize based on High/Low setting
-                        const w = state.settings.pdfRes; 
-                        const h = (bmp.height / bmp.width) * w;
-                        const cvs = document.createElement('canvas'); cvs.width = w; cvs.height = h;
-                        cvs.getContext('2d').drawImage(bmp, 0, 0, w, h);
-                        const data = cvs.toDataURL('image/jpeg', 0.8);
-                        
-                        // Smart Aspect Fit Logic
-                        const dim = getAspectFit(bmp.width, bmp.height, slotW, slotH);
-                        // Center offsets
-                        const offX = (slotW - dim.w) / 2;
-                        const offY = (slotH - dim.h) / 2;
-
-                        // Layout 4 Logic (Grid)
-                        if (layout === 4) {
-                            const col = i % 2; 
-                            const rowX = margin + (col * (slotW + 15)); // spacing
-                            
-                            // FORCE PAGE BREAK logic updated:
-                            // Break if it's the start of a new row (col=0) AND
-                            // (We just finished 4 items OR we are out of vertical space)
-                            const isPageStart = i > 0 && i % 4 === 0;
-                            const isOutOfSpace = y + slotH + 30 > pH - margin;
-
-                            if (col === 0 && (isPageStart || isOutOfSpace)) { 
-                                doc.addPage(); y = margin; 
-                            }
-                            
-                            doc.addImage(data, 'JPEG', rowX + offX, y + offY, dim.w, dim.h);
-                            
-                            // Caption below image slot
-                            let capY = y + slotH + 5;
-                            doc.setFontSize(9); doc.setFont("helvetica", "bold");
-                            doc.text(`#${p.photoNumber} - ${p.timestamp}`, rowX, capY);
-                            doc.setFont("helvetica", "normal"); doc.setFontSize(8);
-                            const capText = [p.captions.c1, p.captions.c2].filter(Boolean).join(" | ");
-                            if (capText) doc.text(capText, rowX, capY+4);
-
-                            // Only advance Y after the second column or last item
-                            if (col === 1 || i === photos.length - 1) {
-                                y += slotH + 20; 
-                            }
-                        } else {
-                            // Standard Stack (1 or 2 layout)
-                            if (y + slotH + 25 > pH - margin) { doc.addPage(); y = margin; }
-                            const centerX = (pW - slotW) / 2;
-                            
-                            doc.addImage(data, 'JPEG', centerX + offX, y + offY, dim.w, dim.h);
-                            y += slotH + 5;
-
-                            // Metadata
-                            doc.setFontSize(10); doc.setFont("helvetica", "bold");
-                            doc.text(`Photo #${p.photoNumber} - ${p.timestamp}`, margin, y); y += 5;
-                            doc.setFont("helvetica", "normal"); doc.setFontSize(9);
-                            const cap = [p.captions.c1, p.captions.c2, p.captions.c3].filter(Boolean).join(" | ");
-                            if (cap) { doc.text(cap, margin, y); y += 5; }
-                            if (p.metaNote) { const nt = doc.splitTextToSize("Note: "+p.metaNote, pW-(margin*2)); doc.text(nt, margin, y); y += (nt.length*4); }
-                            y += 8;
-                        }
-                    }
-                }
+                const notes = await DB.getAll('notes');
+                const doc = await createPDFDoc(photos, notes);
                 doc.save(`${state.settings.reportTitle.replace(/ /g,"_")}.pdf`);
-
             } catch(e) { console.error(e); alert("PDF Error: "+e.message); } finally { setProcessing(false); }
         }
+
+        // --- Full Project Export ---
+        async function downloadProject() {
+            setProcessing(true, "Packaging Project...");
+            try {
+                const zip = new JSZip();
+                const folderPhotos = zip.folder("Photos");
+                const folderReport = zip.folder("Report");
+                const folderData = zip.folder("Data");
+
+                // 1. Photos & Photo Log CSV
+                const photos = await DB.getAll('photos');
+                let photoLogCSV = "Filename,Date,Time,Latitude,Longitude,Heading,Caption1,Caption2,Caption3,Note\n";
+                
+                for (const p of photos) {
+                    let blob = await blobToBuffer(p.finalBlob || (p.finalBuffer ? new Blob([p.finalBuffer]) : null));
+                    if (blob) {
+                        const filename = `IMG_${p.photoNumber}_${p.id}.jpg`;
+                        folderPhotos.file(filename, blob);
+                        
+                        const safe = (s) => `"${(s||"").replace(/"/g, '""')}"`;
+                        photoLogCSV += `${filename},${safe(p.timestamp)},${p.lat},${p.lon},${safe(p.compass)},${safe(p.captions.c1)},${safe(p.captions.c2)},${safe(p.captions.c3)},${safe(p.metaNote)}\n`;
+                    }
+                }
+                folderData.file("Photo_Log.csv", photoLogCSV);
+
+                // 2. Field Notes CSV
+                const notes = await DB.getAll('notes');
+                let notesCSV = "ID,Timestamp,Location,Text\n";
+                notes.forEach(n => {
+                     notesCSV += `${n.id},"${n.timestamp}","${n.location}","${n.text.replace(/"/g, '""')}"\n`;
+                });
+                folderData.file("Field_Notes.csv", notesCSV);
+
+                // 3. PDF Report (Using Refactored Logic)
+                const doc = await createPDFDoc(photos, notes);
+                const pdfBlob = doc.output('blob');
+                folderReport.file(`${state.settings.reportTitle.replace(/ /g,"_")}.pdf`, pdfBlob);
+
+                // 4. Offline Map HTML
+                const mapHTML = generateMapHTML(photos);
+                folderReport.file("Project_Map.html", mapHTML);
+
+                // Generate Zip
+                const content = await zip.generateAsync({type:"blob"});
+                saveAs(content, `Project_Export_${state.settings.projectId || "FieldCam"}_${Date.now()}.zip`);
+
+            } catch (e) {
+                alert("Export Failed: " + e.message);
+                console.error(e);
+            } finally {
+                setProcessing(false);
+            }
+        }
+
+        // Helper to generate the standalone map file
+        function generateMapHTML(photos) {
+            const markers = photos.filter(p => p.lat && p.lon).map(p => ({
+                lat: p.lat, lon: p.lon, num: p.photoNumber, note: p.metaNote || ""
+            }));
+            
+            return `<!DOCTYPE html>
+            <html><head><title>Project Map</title>
+            <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+            <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>
+            <style>body{margin:0;padding:0;} #map{height:100vh;width:100%;}</style>
+            </head><body><div id="map"></div>
+            <script>
+                var map = L.map('map').setView([${markers.length ? markers[0].lat : 39.82}, ${markers.length ? markers[0].lon : -98.58}], ${markers.length ? 13 : 4});
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, attribution:'&copy; OpenStreetMap'}).addTo(map);
+                var data = ${JSON.stringify(markers)};
+                var group = new L.featureGroup();
+                data.forEach(function(d){
+                    var m = L.marker([d.lat, d.lon]).addTo(map).bindPopup("<b>Photo #"+d.num+"</b><br>"+d.note);
+                    m.addTo(group);
+                });
+                if(data.length) map.fitBounds(group.getBounds().pad(0.1));
+            <\/script></body></html>`;
+        }
+
+        ui.downloadProjectBtn.onclick = downloadProject;
 
         // --- Weather ---
         async function fetchWeather(lat, lon) {
@@ -1046,32 +1079,52 @@
         ui.toggleSelect.onclick = toggleSelectMode; ui.cancelSelectBtn.onclick = toggleSelectMode;
 
         // Backup/Restore
+        // Defensive fix: Use helper for blob conversion, guard against null p
         ui.backupBtn.onclick = async () => { 
             setProcessing(true); 
             try { 
                 const ph=await DB.getAll('photos'); 
                 const nt=await DB.getAll('notes'); 
+                
                 const ex=await Promise.all(ph.map(async p=>{ 
-                    // FIX: Check for finalBuffer (DB) or finalBlob (Memory)
+                    if (!p) return null;
+                    
                     let b;
+                    // Prefer buffer from DB
                     if (p.finalBuffer) {
                         b = p.finalBuffer;
-                    } else if (p.finalBlob) {
-                        b = await p.finalBlob.arrayBuffer();
-                    } else {
-                        return null; // Skip invalid
-                    }
+                    } 
+                    // Fallback to blob in memory (if somehow not saved fully)
+                    else if (p.finalBlob) {
+                        try {
+                            b = await blobToBuffer(p.finalBlob);
+                        } catch(err) {
+                            console.error("Blob read error", err);
+                            return null; 
+                        }
+                    } 
+                    
+                    if (!b) return null; // Skip invalid entries
 
                     let bin=''; 
                     const by=new Uint8Array(b); 
                     for(let i=0;i<by.byteLength;i++) bin+=String.fromCharCode(by[i]); 
-                    return {...p, b64:btoa(bin), finalBuffer:null, finalBlob:null, displayUrl:null, originalBlob:null}; 
+                    
+                    return {
+                        ...p, 
+                        b64: btoa(bin), 
+                        finalBuffer:null, 
+                        finalBlob:null, 
+                        displayUrl:null, 
+                        originalBlob:null
+                    }; 
                 })); 
-                const validEx = ex.filter(x => x !== null); // Filter nulls
+                
+                const validEx = ex.filter(x => x !== null);
                 const blob=new Blob([JSON.stringify({v:1, project:state.settings.projectId, photos:validEx, notes:nt})], {type:"application/json"}); 
                 saveAs(blob, `Backup.json`); 
             } catch(e){ 
-                alert("Error: "+e.message); 
+                alert("Backup Failed: "+e.message); 
             } 
             setProcessing(false); 
         };
