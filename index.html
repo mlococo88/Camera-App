@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Field Cam">
-    <title>Field Cam Pro (v9.1)</title>
+    <title>Field Cam Pro (v10.3)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -16,6 +16,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/piexifjs/1.0.6/piexif.js"></script>
+    <!-- jsPDF for Reports -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     
     <!-- Leaflet (Map) -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
@@ -125,7 +127,14 @@
             <div id="gallery-header" class="p-3 flex justify-between items-center bg-gray-800 border-b border-gray-700 flex-shrink-0">
                 <div class="flex items-center gap-2"><span class="font-bold text-sm">Gallery</span><span id="gallery-count" class="text-xs bg-gray-700 px-2 py-0.5 rounded-full text-gray-300">0</span></div>
                 <div class="flex gap-2">
-                    <button id="download-all-btn" class="hidden p-1.5 bg-gray-700 hover:bg-green-600 text-gray-300 rounded" title="Download All"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg></button>
+                    <!-- NEW PDF BUTTON -->
+                    <button id="export-pdf-gallery-btn" class="hidden p-1.5 bg-red-900/50 hover:bg-red-700 text-red-100 rounded border border-red-800 transition-colors" title="Export PDF Report">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                    </button>
+                    <!-- ZIP Button -->
+                    <button id="download-all-btn" class="hidden p-1.5 bg-green-900/50 hover:bg-green-700 text-green-100 rounded border border-green-800 transition-colors" title="Download ZIP">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                    </button>
                     <button id="toggle-select-mode" class="bg-gray-700 hover:bg-indigo-600 text-gray-200 text-xs font-bold py-1.5 px-3 rounded">Select</button>
                 </div>
             </div>
@@ -140,7 +149,10 @@
     <section id="module-notes" class="flex-1 flex flex-col overflow-hidden relative hidden bg-gray-900">
         <div class="p-4 bg-gray-800 border-b border-gray-700 flex justify-between items-center safe-top-padding">
             <h2 class="text-lg font-bold text-white">Field Notes</h2>
-            <button id="export-notes-btn" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-2 px-3 rounded flex items-center gap-2">Export CSV</button>
+            <div class="flex gap-2">
+                <button id="export-pdf-btn" class="bg-red-700 hover:bg-red-800 text-white text-xs font-bold py-2 px-3 rounded flex items-center gap-2">PDF</button>
+                <button id="export-notes-btn" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-2 px-3 rounded flex items-center gap-2">CSV</button>
+            </div>
         </div>
         <div id="notes-list" class="flex-1 overflow-y-auto p-4 space-y-3">
             <div id="notes-placeholder" class="text-center text-gray-500 mt-10 text-sm">No notes recorded yet.</div>
@@ -289,12 +301,7 @@
             projectModal: document.getElementById('project-modal'), projectBtn: document.getElementById('project-settings-btn'), projectIdDisplay: document.getElementById('project-id-display'),
             projectIdInput: document.getElementById('project-id-input'), saveProjectBtn: document.getElementById('save-project-btn'), enableCompassBtn: document.getElementById('enable-compass-btn'),
             backupBtn: document.getElementById('backup-btn'), restoreBtn: document.getElementById('restore-btn'), restoreInput: document.getElementById('restore-input'),
-            // New Inputs
-            defaultInputs: {
-                c1: document.getElementById('default-c1'),
-                c2: document.getElementById('default-c2'),
-                c3: document.getElementById('default-c3')
-            },
+            defaultInputs: { c1: document.getElementById('default-c1'), c2: document.getElementById('default-c2'), c3: document.getElementById('default-c3') },
             compassStatus: document.getElementById('compass-status'), processing: document.getElementById('processing-overlay'), processingText: document.getElementById('processing-text'),
             errorDisplay: document.getElementById('error-display'), errorMsg: document.getElementById('error-msg'), flash: document.getElementById('flash-element'),
             previewModal: document.getElementById('preview-modal'), previewImg: document.getElementById('preview-img'),
@@ -308,7 +315,9 @@
             torchBtn: document.getElementById('torch-btn'), micBtns: { single: document.getElementById('single-mic-btn'), group: document.getElementById('group-mic-btn'), note: document.getElementById('note-mic-btn') },
             cameraContainer: document.getElementById('camera-container'), notesList: document.getElementById('notes-list'), newNoteInput: document.getElementById('new-note-input'), 
             addNoteBtn: document.getElementById('add-note-btn'), cancelNoteEditBtn: document.getElementById('cancel-note-edit-btn'), exportNotesBtn: document.getElementById('export-notes-btn'), newVisitBtn: document.getElementById('new-visit-btn'),
-            mapContainer: document.getElementById('map-container'), mapPhotoCount: document.getElementById('map-photo-count')
+            mapContainer: document.getElementById('map-container'), mapPhotoCount: document.getElementById('map-photo-count'),
+            exportPdfBtn: document.getElementById('export-pdf-btn'),
+            exportPdfGalleryBtn: document.getElementById('export-pdf-gallery-btn')
         };
 
         // --- Map Logic ---
@@ -351,19 +360,7 @@
 
         // --- Weather & GPS ---
         function getWeatherDesc(code) {
-            const c = {
-                0: "Sunny", 1: "Mainly Sunny", 2: "Partly Cloudy", 3: "Overcast",
-                45: "Fog", 48: "Rime Fog",
-                51: "Light Drizzle", 53: "Drizzle", 55: "Heavy Drizzle",
-                56: "Freezing Drizzle", 57: "Freezing Drizzle",
-                61: "Light Rain", 63: "Rain", 65: "Heavy Rain",
-                66: "Freezing Rain", 67: "Freezing Rain",
-                71: "Light Snow", 73: "Snow", 75: "Heavy Snow",
-                77: "Snow Grains",
-                80: "Rain Showers", 81: "Rain Showers", 82: "Violent Showers",
-                85: "Snow Showers", 86: "Snow Showers",
-                95: "Thunderstorm", 96: "Thunderstorm", 99: "Thunderstorm"
-            };
+            const c = { 0: "Sunny", 1: "Mainly Sunny", 2: "Partly Cloudy", 3: "Overcast", 45: "Fog", 51: "Light Drizzle", 61: "Rain", 63: "Rain", 95: "Thunderstorm" };
             return c[code] || "";
         }
 
@@ -439,6 +436,141 @@
             reader.readAsText(file);
         };
         ui.backupBtn.onclick = backupData;
+
+        // --- PDF Generation Logic (NEW) ---
+        async function generatePDFReport() {
+            const { jsPDF } = window.jspdf;
+            if (!jsPDF) return alert("PDF Library not loaded.");
+            
+            setProcessing(true, "Generating PDF...");
+            await new Promise(r => setTimeout(r, 100)); // UI Breath
+
+            try {
+                const doc = new jsPDF({ unit: 'mm', format: 'letter' }); // Standard US Letter
+                const margin = 15;
+                let y = margin;
+                const pageWidth = 215.9; // Letter width in mm
+                const pageHeight = 279.4; // Letter height in mm
+
+                // --- Title Page ---
+                doc.setFontSize(22);
+                doc.text("Field Inspection Report", pageWidth/2, 40, null, null, "center");
+                
+                doc.setFontSize(14);
+                doc.text(`Project: ${state.projectId || "N/A"}`, pageWidth/2, 60, null, null, "center");
+                doc.text(`Date: ${new Date().toLocaleDateString()}`, pageWidth/2, 70, null, null, "center");
+                
+                if (state.weather) {
+                    doc.setFontSize(12);
+                    doc.text(`Weather: ${state.weather}`, pageWidth/2, 85, null, null, "center");
+                }
+                
+                // --- Field Notes Section ---
+                const notes = await DB.getAll('notes');
+                if (notes.length > 0) {
+                    doc.addPage();
+                    y = margin;
+                    doc.setFontSize(16);
+                    doc.text("Field Observations", margin, y);
+                    y += 10;
+                    
+                    doc.setFontSize(11);
+                    notes.sort((a,b) => a.id - b.id).forEach((note, idx) => {
+                        const title = `${note.timestamp} | ${note.location}`;
+                        doc.setFont("helvetica", "bold");
+                        doc.text(title, margin, y);
+                        y += 6;
+                        
+                        doc.setFont("helvetica", "normal");
+                        const splitText = doc.splitTextToSize(note.text, pageWidth - (margin*2));
+                        doc.text(splitText, margin, y);
+                        y += (splitText.length * 6) + 6;
+                        
+                        // Check for page break
+                        if (y > pageHeight - margin) { doc.addPage(); y = margin; }
+                    });
+                }
+
+                // --- Photo Log Section ---
+                const photos = await DB.getAll('photos');
+                if (photos.length > 0) {
+                    photos.sort((a,b) => a.id - b.id);
+                    doc.addPage();
+                    y = margin;
+                    doc.setFontSize(16); doc.setFont("helvetica", "bold");
+                    doc.text("Photo Log", margin, y);
+                    y += 15;
+
+                    // Dimensions for 3" x 5" (approx 76.2mm x 127mm) - Slightly wider now (2000px resolution source)
+                    const targetW = 127; // 5 inches
+                    const targetH = 76.2; // 3 inches
+                    const centerX = (pageWidth - targetW) / 2;
+
+                    // Iterate photos
+                    for (let i = 0; i < photos.length; i++) {
+                        const p = photos[i];
+                        
+                        // 1. Get Image
+                        const blob = new Blob([p.finalBuffer], {type: 'image/jpeg'});
+                        const imgBitmap = await createImageBitmap(blob);
+                        
+                        // 2. High-Res Resize (Target 2000px width for clarity)
+                        const w = 2000;
+                        const h = (imgBitmap.height / imgBitmap.width) * w;
+                        const canvas = document.createElement('canvas');
+                        canvas.width = w; canvas.height = h;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(imgBitmap, 0, 0, w, h);
+                        const imgData = canvas.toDataURL('image/jpeg', 0.9); // High quality
+
+                        // Check page break (Photo + Metadata ~ 110mm space needed)
+                        if (y + targetH + 40 > pageHeight - margin) {
+                            doc.addPage();
+                            y = margin;
+                        }
+
+                        // Center the image in the 5x3 slot
+                        const xOffset = centerX + (targetW - 127) / 2; // Centers the 127mm width
+                        doc.addImage(imgData, 'JPEG', centerX, y, targetW, targetH);
+                        y += targetH + 5;
+
+                        // 4. Metadata
+                        doc.setFontSize(10);
+                        doc.setFont("helvetica", "bold");
+                        doc.text(`Photo #${p.photoNumber} - ${p.timestamp}`, margin, y);
+                        y += 5;
+                        
+                        doc.setFont("helvetica", "normal");
+                        doc.setFontSize(9);
+                        const captionLines = [p.captions.c1, p.captions.c2, p.captions.c3].filter(Boolean).join(" | ");
+                        if (captionLines) {
+                            doc.text(`Captions: ${captionLines}`, margin, y);
+                            y += 5;
+                        }
+                        
+                        if (p.metaNote) {
+                            const noteText = doc.splitTextToSize(`Note: ${p.metaNote}`, pageWidth - (margin*2));
+                            doc.text(noteText, margin, y);
+                            y += (noteText.length * 4);
+                        }
+
+                        y += 10; // Space between photos
+                    }
+                }
+
+                doc.save(`Field_Report_${new Date().toISOString().slice(0,10)}.pdf`);
+
+            } catch(e) {
+                console.error(e);
+                alert("PDF Generation Failed: " + e.message);
+            } finally {
+                setProcessing(false);
+            }
+        }
+        
+        // Wire up new button
+        ui.exportPdfBtn.onclick = generatePDFReport;
+        ui.exportPdfGalleryBtn.onclick = generatePDFReport;
 
         // --- Core Helpers ---
         function setProcessing(active, msg="Processing...") { state.isProcessing = active; ui.processingText.textContent = msg; ui.processing.classList.toggle('hidden', !active); ui.snapBtn.disabled = active; }
@@ -576,9 +708,11 @@
             ui.gallery.innerHTML = ''; ui.galleryCount.innerText = state.photos.length;
             if (state.photos.length === 0) { 
                 ui.downloadAll.classList.add('hidden'); 
+                ui.exportPdfGalleryBtn.classList.add('hidden'); // Fix PDF button visibility
                 ui.gallery.innerHTML = `<div id="gallery-placeholder" class="col-span-full flex flex-col items-center justify-center text-gray-500 mt-10 space-y-2"><p class="text-xs">No photos yet</p></div>`; 
             } else {
                 ui.downloadAll.classList.remove('hidden');
+                ui.exportPdfGalleryBtn.classList.remove('hidden'); // Fix PDF button visibility
                 state.photos.forEach(p => {
                     const div = document.createElement('div');
                     div.className = `grid-item-aspect bg-black rounded overflow-hidden cursor-pointer relative group border-2 ${state.selectedIds.has(p.id)?'border-blue-500':'border-transparent'}`;
