@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Field Cam">
-    <title>Field Cam Pro (v4.7 Series Update)</title>
+    <title>Field Cam Pro (v4.8 Fixed)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -29,7 +29,8 @@
         body { font-family: 'Inter', sans-serif; height: 100dvh; overscroll-behavior-y: contain; padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); touch-action: pan-y; background-color: #111827; user-select: none; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        .grid-item-aspect { position: relative; width: 100%; padding-bottom: 100%; }
+        /* Updated: Use aspect-ratio to enforce square shape and prevent squeezing */
+        .grid-item-aspect { position: relative; width: 100%; aspect-ratio: 1 / 1; }
         .grid-item-aspect > img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
         .loader { border: 4px solid #f3f3f3; border-top: 4px solid #3b82f6; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
@@ -923,140 +924,32 @@
             initCamera(); // Restart camera if resolution/native changed
         }
 
-        function setupEventListeners() {
-            ui.seriesBtn.onclick = () => {
-                if (!state.seriesMode) {
-                    // Turn ON Series Mode
-                    state.seriesMode = true;
-                    state.currentSeriesIds = new Set(); // Reset for new batch
-                    
-                    // UI Updates
-                    ui.seriesBtn.classList.add('bg-green-600/80', 'border-green-400', 'text-green-100');
-                    ui.seriesBtn.classList.remove('bg-black/40', 'border-white/20');
-                    if(navigator.vibrate) navigator.vibrate([50, 50, 50]);
-                    
-                    // Re-render gallery (to ensure no lingering highlights)
-                    renderGallery();
-                } else {
-                    // Turn OFF Series Mode & Trigger Batch Edit
-                    state.seriesMode = false;
-                    
-                    // UI Updates
-                    ui.seriesBtn.classList.remove('bg-green-600/80', 'border-green-400', 'text-green-100');
-                    ui.seriesBtn.classList.add('bg-black/40', 'border-white/20');
-                    if(navigator.vibrate) navigator.vibrate(50);
+        // ==========================================
+        //  MOVED UP FOR SCOPE SAFETY
+        // ==========================================
 
-                    // Check if we captured anything
-                    if (state.currentSeriesIds.size > 0) {
-                        // Transfer series IDs to selection for editing
-                        state.selectedIds = new Set(state.currentSeriesIds);
-                        state.currentSeriesIds.clear(); // Clear tracking immediately so highlights disappear
-                        
-                        // Open Batch Modal
-                        ui.batchCountLabel.innerText = `${state.selectedIds.size} Captured`;
-                        ui.groupInputs.forEach(i => i.value = '');
-                        ui.batchModal.classList.remove('hidden');
-                        
-                        // We do NOT toggleSelectMode() here because we want to act as if we just entered edit mode.
-                        // renderGallery below will show them as 'selected' (blue) instead of 'series' (green)
-                    }
-                    renderGallery();
-                }
-            };
-
-            ui.saveBtn.onclick = async () => { 
-                if (!state.editingId) return; 
-                setProcessing(true); 
-                await new Promise(r=>setTimeout(r,50)); 
-                try { 
-                    const p = state.photos.find(ph => ph.id === state.editingId); 
-                    const c1 = ui.inputs.c1.value; const c2 = ui.inputs.c2.value; const c3 = ui.inputs.c3.value; const meta = ui.inputs.meta.value;
-                    p.captions.c1 = c1; p.captions.c2 = c2; p.captions.c3 = c3; p.metaNote = meta; 
-                    await processPhotoVisuals(p); 
-                    await DB.add('photos', await prepPhotoForSave(p)); 
-                    renderGallery(); 
-                    ui.previewModal.classList.add('hidden'); 
-                } catch(e) { alert("Save error: " + e.message); } 
-                setProcessing(false); 
-            };
-            
-            ui.nativeInput.onchange = async (e) => {
-                if (e.target.files && e.target.files[0]) {
-                    setProcessing(true, "Processing Native Photo...");
-                    try { await handleCapturedBlob(e.target.files[0]); } catch(e) { alert("Error: " + e.message); } finally { setProcessing(false); ui.nativeInput.value = ''; }
-                }
-            };
-
-            ui.closeBtn.onclick = () => ui.previewModal.classList.add('hidden');
-            if(ui.downloadAll) ui.downloadAll.onclick = () => downloadZip(null);
-            if(ui.downloadSelected) ui.downloadSelected.onclick = () => downloadZip(state.selectedIds);
-            
-            if(ui.exportPdfBtn) ui.exportPdfBtn.onclick = generatePDFReport;
-            if(ui.exportPdfGalleryBtn) ui.exportPdfGalleryBtn.onclick = generatePDFReport;
-            
-            if(ui.deleteSelected) ui.deleteSelected.onclick = async () => { if(confirm("Delete selected items?")) { for(let id of state.selectedIds) await DB.delete('photos', id); state.photos = state.photos.filter(p=>!state.selectedIds.has(p.id)); state.selectedIds.clear(); toggleSelectMode(); } };
-            ui.deleteSingleBtn.onclick = async () => { if(confirm("Delete this photo?")) { await DB.delete('photos', state.editingId); state.photos = state.photos.filter(p=>p.id!==state.editingId); ui.previewModal.classList.add('hidden'); renderGallery(); } };
-            ui.downloadSingleBtn.onclick = async () => { const p = state.photos.find(ph => ph.id === state.editingId); if(p) saveAs(p.finalBlob, `IMG_${p.id}.jpg`); };
-            ui.openBatchBtn.onclick = () => { if(state.selectedIds.size === 0) return alert("Select photos first."); ui.batchCountLabel.innerText = `${state.selectedIds.size} Selected`; ui.groupInputs.forEach(i => i.value = ''); ui.batchModal.classList.remove('hidden'); };
-            ui.cancelBatchBtn.onclick = () => { ui.batchModal.classList.add('hidden'); state.selectedIds.clear(); renderGallery(); };
-            ui.applyBatchBtn.onclick = async () => { const [c1, c2, c3, n] = ui.groupInputs.map(i => i.value); if(!c1 && !c2 && !c3 && !n) return ui.batchModal.classList.add('hidden'); ui.batchModal.classList.add('hidden'); setProcessing(true); await new Promise(r => setTimeout(r, 50)); for (const id of state.selectedIds) { const p = state.photos.find(ph => ph.id === id); if(p) { if(c1) p.captions.c1 = c1; if(c2) p.captions.c2 = c2; if(c3) p.captions.c3 = c3; if(n) p.metaNote = n; await processPhotoVisuals(p); await DB.add('photos', await prepPhotoForSave(p)); } } setProcessing(false); state.selectedIds.clear(); renderGallery(); };
-            ui.toggleSelect.onclick = toggleSelectMode; ui.cancelSelectBtn.onclick = toggleSelectMode;
-
-            ui.backupBtn.onclick = async () => { setProcessing(true); try { const blob = await createBackupBlob(); saveAs(blob, `Backup.json`); } catch(e){ alert("Backup Failed: "+e.message); } setProcessing(false); };
-            ui.emailBackupBtn.onclick = async () => {
-                if (!navigator.share || !navigator.canShare) return alert("Sharing not supported.");
-                setProcessing(true, "Preparing Email...");
-                try {
-                    const blob = await createBackupBlob();
-                    const file = new File([blob], "backup.json", { type: "application/json" });
-                    if (navigator.canShare({ files: [file] })) await navigator.share({ files: [file], title: 'Field Cam Backup', text: `Backup for Project: ${state.settings.projectId}` });
-                } catch (e) { if (e.name !== 'AbortError') alert("Share Failed: " + e.message); } finally { setProcessing(false); }
-            };
-            
-            ui.restoreBtn.onclick = () => ui.restoreInput.click();
-            ui.restoreInput.onchange = (e) => { const f=e.target.files[0]; if(!f)return; const r=new FileReader(); r.onload=async(evt)=>{ try{ const d=JSON.parse(evt.target.result); await DB.clear('photos'); await DB.clear('notes'); for(let n of d.notes) await DB.add('notes',n); for(let p of d.photos) { const bs=atob(p.b64); const len=bs.length; const by=new Uint8Array(len); for(let i=0;i<len;i++) by[i]=bs.charCodeAt(i); delete p.b64; p.finalBuffer=by.buffer; await DB.add('photos',p); } alert("Project Restored Successfully"); location.reload(); }catch(e){alert("Restore Failed: "+e.message);} }; r.readAsText(f); };
-
-            if(ui.sUnitF) ui.sUnitF.onclick = () => { state.settings.tempUnit = 'F'; updateUnitUI(); };
-            if(ui.sUnitC) ui.sUnitC.onclick = () => { state.settings.tempUnit = 'C'; updateUnitUI(); };
-            if(ui.projectBtn) ui.projectBtn.onclick = () => { loadSettingsUI(); ui.projectModal.classList.remove('hidden'); };
-            if(ui.closeSettingsBtn) ui.closeSettingsBtn.onclick = () => ui.projectModal.classList.add('hidden');
-            if(ui.saveProjectBtn) ui.saveProjectBtn.onclick = saveSettingsUI;
-            
-            ui.newVisitBtn.onclick = async () => { if(confirm("Reset project? This will clear all local photos and notes.")) { await DB.clear('photos'); await DB.clear('notes'); state.photos=[]; state.notes=[]; state.selectedIds.clear(); state.settings.nextNum=1; localStorage.setItem('fc_num',1); renderGallery(); renderNotes(); renderMapMarkers(); loadSettingsUI(); } };
-            ui.navCamera.onclick = () => switchModule('camera'); ui.navNotes.onclick = () => switchModule('notes'); ui.navMap.onclick = () => switchModule('map');
-            ui.snapBtn.onclick = capturePhoto; 
-            ui.addNoteBtn.onclick = saveNote; ui.cancelNoteEditBtn.onclick = resetNoteInput; ui.exportNotesBtn.onclick = exportNotes;
-            ui.downloadProjectBtn.onclick = downloadProject;
-        }
-
-        async function downloadZip(idSet) {
-            setProcessing(true, "Zipping...");
-            const zip = new JSZip();
-            const targets = idSet ? state.photos.filter(p => idSet.has(p.id)) : state.photos;
-            if (targets.length === 0) { setProcessing(false); return alert("No photos to download."); }
-            let csv = "Filename,Date,Lat,Lon,Direction,Note,Cap1,Cap2,Cap3\n";
-            for (const p of targets) {
-                let blob = p.finalBlob;
-                if (!blob && p.finalBuffer) blob = new Blob([p.finalBuffer], {type: 'image/jpeg'});
-                if (blob) {
-                    zip.file(`IMG_${p.photoNumber}_${p.id}.jpg`, blob);
-                    csv += `IMG_${p.photoNumber}_${p.id}.jpg,"${p.timestamp}",${p.lat},${p.lon},"${p.compass}","${(p.metaNote||"").replace(/"/g,'""')}","${p.captions.c1}","${p.captions.c2}","${p.captions.c3}"\n`;
-                }
+        async function processPhotoVisuals(p) {
+            const img = await createImageFromBlob(p.originalBlob || p.finalBlob);
+            const cvs = document.createElement('canvas'); cvs.width = img.width; cvs.height = img.height; const ctx = cvs.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            if (state.settings.burnIn) {
+                const H = cvs.height; const W = cvs.width; 
+                const fs = Math.floor(H / state.settings.fontScale); 
+                const pad = Math.floor(fs / 2);
+                ctx.font = `bold ${fs}px Arial, sans-serif`; ctx.fillStyle = '#ffffff'; ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 4; ctx.strokeStyle = '#000000'; ctx.lineWidth = fs / 10; ctx.textBaseline = 'bottom';
+                const dt = (t, x, y, a='left') => { if(!t) return; ctx.textAlign=a; ctx.strokeText(t,x,y); ctx.fillText(t,x,y); };
+                let cY = H - pad; [p.captions.c3, p.captions.c2, p.captions.c1].forEach(t => { if(t){ dt(t, pad, cY); cY -= (fs*1.2); }});
+                ctx.font = `bold ${Math.floor(fs*0.7)}px monospace`; let iY = H - pad; 
+                dt(p.location, W-pad, iY, 'right'); iY -= (fs*0.9); dt(p.timestamp, W-pad, iY, 'right');
+                ctx.textBaseline = 'top'; 
+                let tY = pad; if(p.projectId) { dt(p.projectId, pad, tY, 'left'); tY += (fs * 1.2); }
+                dt(`Photo No. ${p.photoNumber}`, pad, tY, 'left');
+                let rY = pad; if(p.compass) { dt(p.compass, W-pad, rY, 'right'); rY += (fs*1.2); }
+                if(p.weather) { ctx.font = `bold ${Math.floor(fs*0.5)}px monospace`; dt(p.weather, W-pad, rY, 'right'); }
             }
-            zip.file("metadata.csv", csv);
-            try { const content = await zip.generateAsync({type:"blob"}); saveAs(content, `FieldCam_Export_${Date.now()}.zip`); } catch (e) { alert("Zip Failed: " + e.message); } finally { setProcessing(false); }
-        }
-
-        async function capturePhoto() {
-            if (state.settings.nativeCam) { ui.nativeInput.click(); return; }
-            if (state.isProcessing) return; setProcessing(true, "Capturing..."); triggerFlash();
-            if(state.settings.haptic && navigator.vibrate) navigator.vibrate(50);
-            try {
-                let blob;
-                if (state.nativeResSupported && state.imageCapture) try { blob = await state.imageCapture.takePhoto(); } catch (e) {}
-                if (!blob) { ui.canvas.width = ui.video.videoWidth; ui.canvas.height = ui.video.videoHeight; ui.canvas.getContext('2d').drawImage(ui.video, 0, 0); blob = await new Promise(r => ui.canvas.toBlob(r, 'image/jpeg', 0.95)); }
-                await handleCapturedBlob(blob);
-            } catch (err) { alert("Failed capture: " + err); } finally { setProcessing(false); }
+            if (p.displayUrl) URL.revokeObjectURL(p.displayUrl);
+            const final = await new Promise(r => cvs.toBlob(r, 'image/jpeg', state.settings.jpegQ)); 
+            p.finalBlob = final; p.displayUrl = URL.createObjectURL(final);
         }
 
         async function handleCapturedBlob(blob) {
@@ -1066,9 +959,6 @@
             
             let c1 = state.settings.defC1; let c2 = state.settings.defC2; let c3 = state.settings.defC3; let metaNote = "";
             
-            // Standard capture logic (No pre-filling in Series Mode anymore)
-            // But we will skip the individual editor if series mode is active
-
             const photo = { 
                 id: Date.now(), originalBlob: blob, displayUrl: null, 
                 captions: { c1, c2, c3 }, metaNote: metaNote, 
@@ -1095,44 +985,29 @@
             }
         }
 
-        async function processPhotoVisuals(p) {
-            const img = await createImageFromBlob(p.originalBlob || p.finalBlob);
-            const cvs = document.createElement('canvas'); cvs.width = img.width; cvs.height = img.height; const ctx = cvs.getContext('2d');
-            ctx.drawImage(img, 0, 0);
-            if (state.settings.burnIn) {
-                const H = cvs.height; const W = cvs.width; 
-                const fs = Math.floor(H / state.settings.fontScale); 
-                const pad = Math.floor(fs / 2);
-                ctx.font = `bold ${fs}px Arial, sans-serif`; ctx.fillStyle = '#ffffff'; ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 4; ctx.strokeStyle = '#000000'; ctx.lineWidth = fs / 10; ctx.textBaseline = 'bottom';
-                const dt = (t, x, y, a='left') => { if(!t) return; ctx.textAlign=a; ctx.strokeText(t,x,y); ctx.fillText(t,x,y); };
-                let cY = H - pad; [p.captions.c3, p.captions.c2, p.captions.c1].forEach(t => { if(t){ dt(t, pad, cY); cY -= (fs*1.2); }});
-                ctx.font = `bold ${Math.floor(fs*0.7)}px monospace`; let iY = H - pad; 
-                dt(p.location, W-pad, iY, 'right'); iY -= (fs*0.9); dt(p.timestamp, W-pad, iY, 'right');
-                ctx.textBaseline = 'top'; 
-                let tY = pad; if(p.projectId) { dt(p.projectId, pad, tY, 'left'); tY += (fs * 1.2); }
-                dt(`Photo No. ${p.photoNumber}`, pad, tY, 'left');
-                let rY = pad; if(p.compass) { dt(p.compass, W-pad, rY, 'right'); rY += (fs*1.2); }
-                if(p.weather) { ctx.font = `bold ${Math.floor(fs*0.5)}px monospace`; dt(p.weather, W-pad, rY, 'right'); }
-            }
-            if (p.displayUrl) URL.revokeObjectURL(p.displayUrl);
-            const final = await new Promise(r => cvs.toBlob(r, 'image/jpeg', state.settings.jpegQ)); 
-            p.finalBlob = final; p.displayUrl = URL.createObjectURL(final);
+        async function capturePhoto() {
+            if (state.settings.nativeCam) { ui.nativeInput.click(); return; }
+            if (state.isProcessing) return; setProcessing(true, "Capturing..."); triggerFlash();
+            if(state.settings.haptic && navigator.vibrate) navigator.vibrate(50);
+            try {
+                let blob;
+                if (state.nativeResSupported && state.imageCapture) try { blob = await state.imageCapture.takePhoto(); } catch (e) {}
+                if (!blob) { ui.canvas.width = ui.video.videoWidth; ui.canvas.height = ui.video.videoHeight; ui.canvas.getContext('2d').drawImage(ui.video, 0, 0); blob = await new Promise(r => ui.canvas.toBlob(r, 'image/jpeg', 0.95)); }
+                await handleCapturedBlob(blob);
+            } catch (err) { alert("Failed capture: " + err); } finally { setProcessing(false); }
         }
 
-        // --- PDF Report Generator ---
         async function createPDFDoc(photos, notes) {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF({ unit: 'mm', format: 'letter' });
             const margin = 15; let y = margin; const pW = 215.9; const pH = 279.4;
             
-            // Title Page
             doc.setFontSize(22); doc.text(state.settings.reportTitle, pW/2, 40, null, null, "center");
             doc.setFontSize(14); doc.text(`Project: ${state.settings.projectId || "N/A"}`, pW/2, 60, null, null, "center");
             if(state.settings.author) doc.text(`Inspector: ${state.settings.author}`, pW/2, 68, null, null, "center");
             doc.text(`Date: ${new Date().toLocaleDateString()}`, pW/2, 76, null, null, "center");
             if (state.weather && state.settings.incMap) doc.text(`Weather: ${state.weather}`, pW/2, 90, null, null, "center");
 
-            // Notes
             if (state.settings.incNotes && notes && notes.length > 0) {
                 doc.addPage(); y = margin; doc.setFontSize(16); doc.text("Field Observations", margin, y); y += 10; doc.setFontSize(11);
                 notes.sort((a,b) => a.id - b.id).forEach(n => {
@@ -1142,7 +1017,6 @@
                 });
             }
 
-            // Photos
             if (photos && photos.length > 0) {
                 photos.sort((a,b) => a.id - b.id); doc.addPage(); y = margin; doc.setFontSize(16); doc.setFont("helvetica", "bold"); doc.text("Photo Log", margin, y); y += 15;
                 const layout = state.settings.pdfLayout; 
@@ -1186,6 +1060,11 @@
             try { const photos = await DB.getAll('photos'); const notes = await DB.getAll('notes'); const doc = await createPDFDoc(photos, notes); doc.save(`${state.settings.reportTitle.replace(/ /g,"_")}.pdf`); } catch(e) { console.error(e); alert("PDF Error: "+e.message); } finally { setProcessing(false); }
         }
 
+        function generateMapHTML(photos) {
+            const markers = photos.filter(p => p.lat && p.lon).map(p => ({ lat: p.lat, lon: p.lon, num: p.photoNumber, note: p.metaNote || "" }));
+            return `<!DOCTYPE html><html><head><title>Project Map</title><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script><style>body{margin:0;padding:0;} #map{height:100vh;width:100%;}</style></head><body><div id="map"></div><script>var map = L.map('map').setView([${markers.length ? markers[0].lat : 39.82}, ${markers.length ? markers[0].lon : -98.58}], ${markers.length ? 13 : 4});L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, attribution:'&copy; OpenStreetMap'}).addTo(map);var data = ${JSON.stringify(markers)};var group = new L.featureGroup();data.forEach(function(d){var m = L.marker([d.lat, d.lon]).addTo(map).bindPopup("<b>Photo #"+d.num+"</b><br>"+d.note);m.addTo(group);});if(data.length) map.fitBounds(group.getBounds().pad(0.1));<\/script></body></html>`;
+        }
+
         async function downloadProject() {
             setProcessing(true, "Packaging Project...");
             try {
@@ -1209,11 +1088,6 @@
             } catch (e) { alert("Export Failed: " + e.message); console.error(e); } finally { setProcessing(false); }
         }
 
-        function generateMapHTML(photos) {
-            const markers = photos.filter(p => p.lat && p.lon).map(p => ({ lat: p.lat, lon: p.lon, num: p.photoNumber, note: p.metaNote || "" }));
-            return `<!DOCTYPE html><html><head><title>Project Map</title><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script><style>body{margin:0;padding:0;} #map{height:100vh;width:100%;}</style></head><body><div id="map"></div><script>var map = L.map('map').setView([${markers.length ? markers[0].lat : 39.82}, ${markers.length ? markers[0].lon : -98.58}], ${markers.length ? 13 : 4});L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, attribution:'&copy; OpenStreetMap'}).addTo(map);var data = ${JSON.stringify(markers)};var group = new L.featureGroup();data.forEach(function(d){var m = L.marker([d.lat, d.lon]).addTo(map).bindPopup("<b>Photo #"+d.num+"</b><br>"+d.note);m.addTo(group);});if(data.length) map.fitBounds(group.getBounds().pad(0.1));<\/script></body></html>`;
-        }
-
         async function createBackupBlob() {
             const ph = await DB.getAll('photos'); const nt = await DB.getAll('notes'); 
             const ex = await Promise.all(ph.map(async p => { 
@@ -1223,6 +1097,132 @@
             }));
             const validEx = ex.filter(x => x !== null);
             return new Blob([JSON.stringify({v:1, project:state.settings.projectId, photos:validEx, notes:nt})], {type:"application/json"});
+        }
+
+        async function downloadZip(idSet) {
+            setProcessing(true, "Zipping...");
+            const zip = new JSZip();
+            const targets = idSet ? state.photos.filter(p => idSet.has(p.id)) : state.photos;
+            if (targets.length === 0) { setProcessing(false); return alert("No photos to download."); }
+            let csv = "Filename,Date,Lat,Lon,Direction,Note,Cap1,Cap2,Cap3\n";
+            for (const p of targets) {
+                let blob = p.finalBlob;
+                if (!blob && p.finalBuffer) blob = new Blob([p.finalBuffer], {type: 'image/jpeg'});
+                if (blob) {
+                    zip.file(`IMG_${p.photoNumber}_${p.id}.jpg`, blob);
+                    csv += `IMG_${p.photoNumber}_${p.id}.jpg,"${p.timestamp}",${p.lat},${p.lon},"${p.compass}","${(p.metaNote||"").replace(/"/g,'""')}","${p.captions.c1}","${p.captions.c2}","${p.captions.c3}"\n`;
+                }
+            }
+            zip.file("metadata.csv", csv);
+            try { const content = await zip.generateAsync({type:"blob"}); saveAs(content, `FieldCam_Export_${Date.now()}.zip`); } catch (e) { alert("Zip Failed: " + e.message); } finally { setProcessing(false); }
+        }
+
+        // ==========================================
+        //  EVENT LISTENERS (NOW SAFE)
+        // ==========================================
+
+        function setupEventListeners() {
+            ui.seriesBtn.onclick = () => {
+                if (!state.seriesMode) {
+                    // Turn ON Series Mode
+                    state.seriesMode = true;
+                    state.currentSeriesIds = new Set(); // Reset for new batch
+                    
+                    // UI Updates
+                    ui.seriesBtn.classList.add('bg-green-600/80', 'border-green-400', 'text-green-100');
+                    ui.seriesBtn.classList.remove('bg-black/40', 'border-white/20');
+                    if(navigator.vibrate) navigator.vibrate([50, 50, 50]);
+                    
+                    // Re-render gallery (to ensure no lingering highlights)
+                    renderGallery();
+                } else {
+                    // Turn OFF Series Mode & Trigger Batch Edit
+                    state.seriesMode = false;
+                    
+                    // UI Updates
+                    ui.seriesBtn.classList.remove('bg-green-600/80', 'border-green-400', 'text-green-100');
+                    ui.seriesBtn.classList.add('bg-black/40', 'border-white/20');
+                    if(navigator.vibrate) navigator.vibrate(50);
+
+                    // Check if we captured anything
+                    if (state.currentSeriesIds.size > 0) {
+                        // Transfer series IDs to selection for editing
+                        state.selectedIds = new Set(state.currentSeriesIds);
+                        state.currentSeriesIds.clear(); // Clear tracking immediately so highlights disappear
+                        
+                        // Open Batch Modal
+                        ui.batchCountLabel.innerText = `${state.selectedIds.size} Captured`;
+                        ui.groupInputs.forEach(i => i.value = '');
+                        ui.batchModal.classList.remove('hidden');
+                    }
+                    renderGallery();
+                }
+            };
+
+            ui.saveBtn.onclick = async () => { 
+                if (!state.editingId) return; 
+                setProcessing(true); 
+                await new Promise(r=>setTimeout(r,50)); 
+                try { 
+                    const p = state.photos.find(ph => ph.id === state.editingId); 
+                    const c1 = ui.inputs.c1.value; const c2 = ui.inputs.c2.value; const c3 = ui.inputs.c3.value; const meta = ui.inputs.meta.value;
+                    p.captions.c1 = c1; p.captions.c2 = c2; p.captions.c3 = c3; p.metaNote = meta; 
+                    await processPhotoVisuals(p); 
+                    await DB.add('photos', await prepPhotoForSave(p)); 
+                    renderGallery(); 
+                    ui.previewModal.classList.add('hidden'); 
+                } catch(e) { alert("Save error: " + e.message); } 
+                setProcessing(false); 
+            };
+            
+            ui.nativeInput.onchange = async (e) => {
+                if (e.target.files && e.target.files[0]) {
+                    setProcessing(true, "Processing Native Photo...");
+                    try { await handleCapturedBlob(e.target.files[0]); } catch(e) { alert("Error: " + e.message); } finally { setProcessing(false); ui.nativeInput.value = ''; }
+                }
+            };
+
+            ui.closeBtn.onclick = () => ui.previewModal.classList.add('hidden');
+            if(ui.downloadAll) ui.downloadAll.onclick = () => downloadZip(null);
+            if(ui.downloadSelected) ui.downloadSelected.onclick = () => downloadZip(state.selectedIds);
+            
+            // Fixed Reference Errors
+            if(ui.exportPdfBtn) ui.exportPdfBtn.onclick = generatePDFReport;
+            if(ui.exportPdfGalleryBtn) ui.exportPdfGalleryBtn.onclick = generatePDFReport;
+            
+            if(ui.deleteSelected) ui.deleteSelected.onclick = async () => { if(confirm("Delete selected items?")) { for(let id of state.selectedIds) await DB.delete('photos', id); state.photos = state.photos.filter(p=>!state.selectedIds.has(p.id)); state.selectedIds.clear(); toggleSelectMode(); } };
+            ui.deleteSingleBtn.onclick = async () => { if(confirm("Delete this photo?")) { await DB.delete('photos', state.editingId); state.photos = state.photos.filter(p=>p.id!==state.editingId); ui.previewModal.classList.add('hidden'); renderGallery(); } };
+            ui.downloadSingleBtn.onclick = async () => { const p = state.photos.find(ph => ph.id === state.editingId); if(p) saveAs(p.finalBlob, `IMG_${p.id}.jpg`); };
+            ui.openBatchBtn.onclick = () => { if(state.selectedIds.size === 0) return alert("Select photos first."); ui.batchCountLabel.innerText = `${state.selectedIds.size} Selected`; ui.groupInputs.forEach(i => i.value = ''); ui.batchModal.classList.remove('hidden'); };
+            ui.cancelBatchBtn.onclick = () => { ui.batchModal.classList.add('hidden'); state.selectedIds.clear(); renderGallery(); };
+            ui.applyBatchBtn.onclick = async () => { const [c1, c2, c3, n] = ui.groupInputs.map(i => i.value); if(!c1 && !c2 && !c3 && !n) return ui.batchModal.classList.add('hidden'); ui.batchModal.classList.add('hidden'); setProcessing(true); await new Promise(r => setTimeout(r, 50)); for (const id of state.selectedIds) { const p = state.photos.find(ph => ph.id === id); if(p) { if(c1) p.captions.c1 = c1; if(c2) p.captions.c2 = c2; if(c3) p.captions.c3 = c3; if(n) p.metaNote = n; await processPhotoVisuals(p); await DB.add('photos', await prepPhotoForSave(p)); } } setProcessing(false); state.selectedIds.clear(); renderGallery(); };
+            ui.toggleSelect.onclick = toggleSelectMode; ui.cancelSelectBtn.onclick = toggleSelectMode;
+
+            ui.backupBtn.onclick = async () => { setProcessing(true); try { const blob = await createBackupBlob(); saveAs(blob, `Backup.json`); } catch(e){ alert("Backup Failed: "+e.message); } setProcessing(false); };
+            ui.emailBackupBtn.onclick = async () => {
+                if (!navigator.share || !navigator.canShare) return alert("Sharing not supported.");
+                setProcessing(true, "Preparing Email...");
+                try {
+                    const blob = await createBackupBlob();
+                    const file = new File([blob], "backup.json", { type: "application/json" });
+                    if (navigator.canShare({ files: [file] })) await navigator.share({ files: [file], title: 'Field Cam Backup', text: `Backup for Project: ${state.settings.projectId}` });
+                } catch (e) { if (e.name !== 'AbortError') alert("Share Failed: " + e.message); } finally { setProcessing(false); }
+            };
+            
+            ui.restoreBtn.onclick = () => ui.restoreInput.click();
+            ui.restoreInput.onchange = (e) => { const f=e.target.files[0]; if(!f)return; const r=new FileReader(); r.onload=async(evt)=>{ try{ const d=JSON.parse(evt.target.result); await DB.clear('photos'); await DB.clear('notes'); for(let n of d.notes) await DB.add('notes',n); for(let p of d.photos) { const bs=atob(p.b64); const len=bs.length; const by=new Uint8Array(len); for(let i=0;i<len;i++) by[i]=bs.charCodeAt(i); delete p.b64; p.finalBuffer=by.buffer; await DB.add('photos',p); } alert("Project Restored Successfully"); location.reload(); }catch(e){alert("Restore Failed: "+e.message);} }; r.readAsText(f); };
+
+            if(ui.sUnitF) ui.sUnitF.onclick = () => { state.settings.tempUnit = 'F'; updateUnitUI(); };
+            if(ui.sUnitC) ui.sUnitC.onclick = () => { state.settings.tempUnit = 'C'; updateUnitUI(); };
+            if(ui.projectBtn) ui.projectBtn.onclick = () => { loadSettingsUI(); ui.projectModal.classList.remove('hidden'); };
+            if(ui.closeSettingsBtn) ui.closeSettingsBtn.onclick = () => ui.projectModal.classList.add('hidden');
+            if(ui.saveProjectBtn) ui.saveProjectBtn.onclick = saveSettingsUI;
+            
+            ui.newVisitBtn.onclick = async () => { if(confirm("Reset project? This will clear all local photos and notes.")) { await DB.clear('photos'); await DB.clear('notes'); state.photos=[]; state.notes=[]; state.selectedIds.clear(); state.settings.nextNum=1; localStorage.setItem('fc_num',1); renderGallery(); renderNotes(); renderMapMarkers(); loadSettingsUI(); } };
+            ui.navCamera.onclick = () => switchModule('camera'); ui.navNotes.onclick = () => switchModule('notes'); ui.navMap.onclick = () => switchModule('map');
+            ui.snapBtn.onclick = capturePhoto; 
+            ui.addNoteBtn.onclick = saveNote; ui.cancelNoteEditBtn.onclick = resetNoteInput; ui.exportNotesBtn.onclick = exportNotes;
+            ui.downloadProjectBtn.onclick = downloadProject;
         }
 
         function setupProject() {
