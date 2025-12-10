@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Field Cam">
-    <title>Field Cam Pro (v3.3)</title>
+    <title>Field Cam Pro (v3.6)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -417,7 +417,7 @@
                 gpsFmt: localStorage.getItem('fc_gps') || "dec",
                 haptic: localStorage.getItem('fc_hap') !== "false",
                 camRes: localStorage.getItem('fc_camRes') || "max",
-                nativeCam: localStorage.getItem('fc_nativeCam') === "true" // New setting
+                nativeCam: localStorage.getItem('fc_nativeCam') !== "false" // Changed to default TRUE
             }
         };
 
@@ -863,8 +863,17 @@
                     for (let i = 0; i < photos.length; i++) {
                         const p = photos[i];
                         // Process Image for PDF
-                        const blob = new Blob([p.finalBuffer], {type: 'image/jpeg'});
-                        const bmp = await createImageBitmap(blob);
+                        // FIX: Check for finalBuffer (DB) or finalBlob (Memory) - prevent crash if undefined
+                        let b;
+                        if (p.finalBuffer) {
+                            b = new Blob([p.finalBuffer], {type: 'image/jpeg'});
+                        } else if (p.finalBlob) {
+                            b = p.finalBlob;
+                        } else {
+                            continue; // Skip invalid
+                        }
+
+                        const bmp = await createImageBitmap(b);
                         // Resize based on High/Low setting
                         const w = state.settings.pdfRes; 
                         const h = (bmp.height / bmp.width) * w;
@@ -883,8 +892,13 @@
                             const col = i % 2; 
                             const rowX = margin + (col * (slotW + 15)); // spacing
                             
-                            // Check vertical space (approx photo H + text H)
-                            if (col === 0 && y + slotH + 30 > pH - margin) { 
+                            // FORCE PAGE BREAK logic updated:
+                            // Break if it's the start of a new row (col=0) AND
+                            // (We just finished 4 items OR we are out of vertical space)
+                            const isPageStart = i > 0 && i % 4 === 0;
+                            const isOutOfSpace = y + slotH + 30 > pH - margin;
+
+                            if (col === 0 && (isPageStart || isOutOfSpace)) { 
                                 doc.addPage(); y = margin; 
                             }
                             
@@ -1032,7 +1046,35 @@
         ui.toggleSelect.onclick = toggleSelectMode; ui.cancelSelectBtn.onclick = toggleSelectMode;
 
         // Backup/Restore
-        ui.backupBtn.onclick = async () => { setProcessing(true); try { const ph=await DB.getAll('photos'); const nt=await DB.getAll('notes'); const ex=await Promise.all(ph.map(async p=>{ const b=await p.finalBlob.arrayBuffer(); let bin=''; const by=new Uint8Array(b); for(let i=0;i<by.byteLength;i++) bin+=String.fromCharCode(by[i]); return {...p, b64:btoa(bin), finalBuffer:null, finalBlob:null, displayUrl:null, originalBlob:null}; })); const blob=new Blob([JSON.stringify({v:1, project:state.settings.projectId, photos:ex, notes:nt})], {type:"application/json"}); saveAs(blob, `Backup.json`); } catch(e){ alert("Error: "+e.message); } setProcessing(false); };
+        ui.backupBtn.onclick = async () => { 
+            setProcessing(true); 
+            try { 
+                const ph=await DB.getAll('photos'); 
+                const nt=await DB.getAll('notes'); 
+                const ex=await Promise.all(ph.map(async p=>{ 
+                    // FIX: Check for finalBuffer (DB) or finalBlob (Memory)
+                    let b;
+                    if (p.finalBuffer) {
+                        b = p.finalBuffer;
+                    } else if (p.finalBlob) {
+                        b = await p.finalBlob.arrayBuffer();
+                    } else {
+                        return null; // Skip invalid
+                    }
+
+                    let bin=''; 
+                    const by=new Uint8Array(b); 
+                    for(let i=0;i<by.byteLength;i++) bin+=String.fromCharCode(by[i]); 
+                    return {...p, b64:btoa(bin), finalBuffer:null, finalBlob:null, displayUrl:null, originalBlob:null}; 
+                })); 
+                const validEx = ex.filter(x => x !== null); // Filter nulls
+                const blob=new Blob([JSON.stringify({v:1, project:state.settings.projectId, photos:validEx, notes:nt})], {type:"application/json"}); 
+                saveAs(blob, `Backup.json`); 
+            } catch(e){ 
+                alert("Error: "+e.message); 
+            } 
+            setProcessing(false); 
+        };
         ui.restoreBtn.onclick = () => ui.restoreInput.click();
         ui.restoreInput.onchange = (e) => { const f=e.target.files[0]; if(!f)return; const r=new FileReader(); r.onload=async(evt)=>{ try{ const d=JSON.parse(evt.target.result); await DB.clear('photos'); await DB.clear('notes'); for(let n of d.notes) await DB.add('notes',n); for(let p of d.photos) { const bs=atob(p.b64); const len=bs.length; const by=new Uint8Array(len); for(let i=0;i<len;i++) by[i]=bs.charCodeAt(i); delete p.b64; p.finalBuffer=by.buffer; await DB.add('photos',p); } alert("Project Restored Successfully"); location.reload(); }catch(e){alert("Restore Failed: "+e.message);} }; r.readAsText(f); };
 
