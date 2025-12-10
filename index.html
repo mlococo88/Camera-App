@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Field Cam">
-    <title>Field Cam Pro (v3.1)</title>
+    <title>Field Cam Pro (v3.2)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -180,6 +180,15 @@
             <div class="bg-gray-800 rounded-lg p-4 space-y-4">
                 <h3 class="text-xs font-bold text-blue-400 uppercase tracking-wider mb-2">Camera & Image</h3>
                 
+                <div class="flex items-center justify-between">
+                    <span class="text-sm">Camera Resolution</span>
+                    <select id="set-cam-res" class="bg-gray-900 text-white text-xs rounded p-2 border border-gray-600">
+                        <option value="max" selected>Max (4K if avail)</option>
+                        <option value="high">High (1080p)</option>
+                        <option value="med">Medium (720p)</option>
+                    </select>
+                </div>
+
                 <div class="flex items-center justify-between">
                     <span class="text-sm">Burn Info on Photo</span>
                     <label class="relative inline-flex items-center cursor-pointer">
@@ -382,7 +391,8 @@
                 incNotes: localStorage.getItem('fc_inotes') !== "false",
                 tempUnit: localStorage.getItem('fc_unit') || "F",
                 gpsFmt: localStorage.getItem('fc_gps') || "dec",
-                haptic: localStorage.getItem('fc_hap') !== "false"
+                haptic: localStorage.getItem('fc_hap') !== "false",
+                camRes: localStorage.getItem('fc_camRes') || "max"
             }
         };
 
@@ -400,6 +410,7 @@
             sPid: document.getElementById('set-proj-id'), sAuth: document.getElementById('set-author'), sNum: document.getElementById('set-next-num'),
             sC1: document.getElementById('set-def-c1'), sC2: document.getElementById('set-def-c2'), sC3: document.getElementById('set-def-c3'),
             sBurn: document.getElementById('set-burn-in'), sFont: document.getElementById('set-font-scale'), sJpeg: document.getElementById('set-jpeg-q'),
+            sRes: document.getElementById('set-cam-res'),
             sComp: document.getElementById('set-compass-ui'), sRTitle: document.getElementById('set-report-title'), sPlay: document.getElementById('set-pdf-layout'),
             sPres: document.getElementById('set-pdf-res'), sImap: document.getElementById('set-inc-map'), sInotes: document.getElementById('set-inc-notes'),
             sUnitC: document.getElementById('set-unit-c'), sUnitF: document.getElementById('set-unit-f'), sGps: document.getElementById('set-gps-fmt'), sHap: document.getElementById('set-haptic'),
@@ -640,7 +651,9 @@
             const s = state.settings;
             ui.sPid.value = s.projectId; ui.sAuth.value = s.author; ui.sNum.value = s.nextNum;
             ui.sC1.value = s.defC1; ui.sC2.value = s.defC2; ui.sC3.value = s.defC3;
-            ui.sBurn.checked = s.burnIn; ui.sFont.value = s.fontScale; ui.sJpeg.value = s.jpegQ; ui.sComp.checked = s.compassUi;
+            ui.sBurn.checked = s.burnIn; ui.sFont.value = s.fontScale; ui.sJpeg.value = s.jpegQ; 
+            ui.sRes.value = s.camRes;
+            ui.sComp.checked = s.compassUi;
             ui.sRTitle.value = s.reportTitle; ui.sPlay.value = s.pdfLayout; ui.sPres.value = s.pdfRes;
             ui.sImap.checked = s.incMap; ui.sInotes.checked = s.incNotes;
             ui.sGps.value = s.gpsFmt; ui.sHap.checked = s.haptic;
@@ -648,19 +661,27 @@
         }
         function saveSettingsUI() {
             const s = state.settings;
+            const oldRes = s.camRes;
+            
             s.projectId = ui.sPid.value.trim(); s.author = ui.sAuth.value.trim(); s.nextNum = parseInt(ui.sNum.value) || 1;
             s.defC1 = ui.sC1.value.trim(); s.defC2 = ui.sC2.value.trim(); s.defC3 = ui.sC3.value.trim();
             s.burnIn = ui.sBurn.checked; s.fontScale = parseInt(ui.sFont.value); s.jpegQ = parseFloat(ui.sJpeg.value); s.compassUi = ui.sComp.checked;
             s.reportTitle = ui.sRTitle.value.trim(); s.pdfLayout = parseInt(ui.sPlay.value); s.pdfRes = parseInt(ui.sPres.value);
             s.incMap = ui.sImap.checked; s.incNotes = ui.sInotes.checked; s.gpsFmt = ui.sGps.value; s.haptic = ui.sHap.checked;
+            s.camRes = ui.sRes.value;
             
             // Save to LocalStorage
-            Object.keys(s).forEach(k => localStorage.setItem('fc_'+(k === 'projectId'?'pid':k === 'author'?'auth':k === 'nextNum'?'num':k==='defC1'?'c1':k==='defC2'?'c2':k==='defC3'?'c3':k==='burnIn'?'burn':k==='fontScale'?'font':k==='jpegQ'?'jq':k==='compassUi'?'comp':k==='reportTitle'?'rt':k==='pdfLayout'?'play':k==='pdfRes'?'pres':k==='incMap'?'imap':k==='incNotes'?'inotes':k==='tempUnit'?'unit':k==='gpsFmt'?'gps':'hap'), s[k]));
+            Object.keys(s).forEach(k => localStorage.setItem('fc_'+(k === 'projectId'?'pid':k === 'author'?'auth':k === 'nextNum'?'num':k==='defC1'?'c1':k==='defC2'?'c2':k==='defC3'?'c3':k==='burnIn'?'burn':k==='fontScale'?'font':k==='jpegQ'?'jq':k==='compassUi'?'comp':k==='reportTitle'?'rt':k==='pdfLayout'?'play':k==='pdfRes'?'pres':k==='incMap'?'imap':k==='incNotes'?'inotes':k==='tempUnit'?'unit':k==='gpsFmt'?'gps':k==='camRes'?'camRes':'hap'), s[k]));
             
             // Apply
             updateProjectDisplay();
             ui.compassOverlay.classList.toggle('hidden', !s.compassUi);
             ui.projectModal.classList.add('hidden');
+            
+            // Re-init camera if resolution changed
+            if (oldRes !== s.camRes) {
+                initCamera();
+            }
         }
         function updateUnitUI() {
             if (state.settings.tempUnit === 'F') { ui.sUnitF.classList.add('bg-blue-600','text-white'); ui.sUnitC.classList.remove('bg-blue-600','text-white'); }
@@ -873,7 +894,41 @@
         function startCompassListener() { window.addEventListener('deviceorientation', (e) => { let h = e.webkitCompassHeading || Math.abs(e.alpha - 360); if (h) { state.heading = Math.round(h); ui.compassText.textContent = `${['N','NE','E','SE','S','SW','W','NW'][Math.round(state.heading/45)%8]} ${state.heading}°`; } }); state.compassEnabled = true; ui.compassOverlay.classList.remove('hidden'); }
         async function initCamera() {
             if (!window.isSecureContext) console.warn("HTTPS likely required for Camera.");
-            try { const s = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: "environment" }, width: { ideal: 3840 }, height: { ideal: 2160 } } }); ui.video.srcObject = s; state.videoStream = s; state.track = s.getVideoTracks()[0]; if ('ImageCapture' in window) try{state.imageCapture=new ImageCapture(state.track); state.nativeResSupported=true;}catch(e){} const c = state.track.getCapabilities(); if(c.zoom) setupPinchZoom(state.track); if(c.torch) { ui.torchBtn.classList.remove('hidden'); ui.torchBtn.onclick=()=>{state.torchOn=!state.torchOn; state.track.applyConstraints({advanced:[{torch:state.torchOn}]});}; } } catch(e){ document.getElementById('error-display').classList.remove('hidden'); }
+            
+            // Cleanup existing stream
+            if (state.videoStream) {
+                state.videoStream.getTracks().forEach(track => track.stop());
+            }
+
+            const camRes = state.settings.camRes || 'max';
+            let widthConstraint = { ideal: 3840 }; // Max
+            if (camRes === 'high') widthConstraint = { ideal: 1920 };
+            if (camRes === 'med') widthConstraint = { ideal: 1280 };
+
+            try { 
+                const s = await navigator.mediaDevices.getUserMedia({ 
+                    audio: false, 
+                    video: { 
+                        facingMode: { ideal: "environment" }, 
+                        width: widthConstraint 
+                    } 
+                }); 
+                ui.video.srcObject = s; 
+                state.videoStream = s; 
+                state.track = s.getVideoTracks()[0]; 
+                
+                if ('ImageCapture' in window) try {
+                    state.imageCapture = new ImageCapture(state.track); 
+                    state.nativeResSupported = true;
+                } catch(e) {} 
+                
+                const c = state.track.getCapabilities(); 
+                if(c.zoom) setupPinchZoom(state.track); 
+                if(c.torch) { 
+                    ui.torchBtn.classList.remove('hidden'); 
+                    ui.torchBtn.onclick=()=>{state.torchOn=!state.torchOn; state.track.applyConstraints({advanced:[{torch:state.torchOn}]});}; 
+                } 
+            } catch(e) { document.getElementById('error-display').classList.remove('hidden'); }
         }
         function setupPinchZoom(track) {
             const settings = { min: track.getCapabilities().zoom.min, max: track.getCapabilities().zoom.max, step: track.getCapabilities().zoom.step, current: track.getSettings().zoom || 1 };
