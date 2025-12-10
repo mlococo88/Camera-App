@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Field Cam">
-    <title>Field Cam Pro (v4.6 Fixed)</title>
+    <title>Field Cam Pro (v4.7 Series Update)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -40,12 +40,16 @@
         .safe-top-padding { padding-top: calc(env(safe-area-inset-top) + 1rem); }
         
         /* Checkbox styling for gallery selection */
-        .select-ring { border: 3px solid transparent; }
+        .select-ring { border: 3px solid transparent; transition: border-color 0.2s; }
         .selected-item .select-ring { border-color: #3b82f6; }
         .selected-item img { opacity: 0.7; }
         .selection-check { display: none; position: absolute; top: 4px; right: 4px; background: #3b82f6; color: white; border-radius: 50%; padding: 2px; }
         .selected-item .selection-check { display: block; }
         
+        /* Series Active Styling */
+        .series-active-item .select-ring { border-color: #22c55e; border-style: dashed; }
+        .series-active-item::after { content: 'SERIES'; position: absolute; bottom: 0; left: 0; right: 0; background: #22c55e; color: #000; font-size: 8px; font-weight: 800; text-align: center; padding: 2px 0; }
+
         /* Toggle Switch */
         .toggle-checkbox:checked { right: 0; border-color: #3b82f6; }
         .toggle-checkbox:checked + .toggle-label { background-color: #3b82f6; }
@@ -105,8 +109,8 @@
             <!-- Torch -->
             <button id="torch-btn" class="absolute top-4 left-4 p-3 bg-black/40 backdrop-blur rounded-full text-white border border-white/20 hidden z-10 hover:bg-black/60"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg></button>
             
-            <!-- NEW Series Mode Toggle -->
-            <button id="series-mode-btn" class="absolute bottom-6 right-6 md:right-10 p-3 bg-black/40 backdrop-blur rounded-full text-white border border-white/20 z-10 transition-colors hover:bg-black/60 flex flex-col items-center justify-center gap-1" title="Series Mode: Lock Captions">
+            <!-- Series Mode Toggle -->
+            <button id="series-mode-btn" class="absolute bottom-6 right-6 md:right-10 p-3 bg-black/40 backdrop-blur rounded-full text-white border border-white/20 z-10 transition-colors hover:bg-black/60 flex flex-col items-center justify-center gap-1" title="Series Mode: Batch Caption">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
                 <span class="text-[8px] font-bold uppercase tracking-wider">Series</span>
             </button>
@@ -419,9 +423,9 @@
             heading: null, track: null, torchOn: false, weather: "", longPressTimer: null, longPressTriggered: false,
             mapInstance: null, mapMarkersGroup: null,
             
-            // NEW: Series Mode State
+            // Series Mode State
             seriesMode: false,
-            seriesCaptions: null,
+            currentSeriesIds: new Set(), // IDs of photos in current series
 
             // SETTINGS STATE
             settings: {
@@ -712,7 +716,16 @@
 
             state.photos.sort((a,b) => b.id - a.id).forEach(p => {
                 const el = document.createElement('div');
-                el.className = `grid-item-aspect bg-black rounded overflow-hidden cursor-pointer select-ring ${state.isSelectMode && state.selectedIds.has(p.id) ? 'selected-item' : ''}`;
+                // Check if item is part of active series
+                const isSeries = state.seriesMode && state.currentSeriesIds.has(p.id);
+                const isSelected = state.isSelectMode && state.selectedIds.has(p.id);
+                
+                let classes = 'grid-item-aspect bg-black rounded overflow-hidden cursor-pointer select-ring';
+                if (isSelected) classes += ' selected-item';
+                if (isSeries) classes += ' series-active-item';
+                
+                el.className = classes;
+                
                 const check = document.createElement('div'); check.className = 'selection-check'; check.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>';
                 const img = document.createElement('img');
                 img.src = p.displayUrl;
@@ -912,17 +925,42 @@
 
         function setupEventListeners() {
             ui.seriesBtn.onclick = () => {
-                state.seriesMode = !state.seriesMode;
-                if (state.seriesMode) {
+                if (!state.seriesMode) {
+                    // Turn ON Series Mode
+                    state.seriesMode = true;
+                    state.currentSeriesIds = new Set(); // Reset for new batch
+                    
+                    // UI Updates
                     ui.seriesBtn.classList.add('bg-green-600/80', 'border-green-400', 'text-green-100');
                     ui.seriesBtn.classList.remove('bg-black/40', 'border-white/20');
-                    state.seriesCaptions = null;
                     if(navigator.vibrate) navigator.vibrate([50, 50, 50]);
+                    
+                    // Re-render gallery (to ensure no lingering highlights)
+                    renderGallery();
                 } else {
+                    // Turn OFF Series Mode & Trigger Batch Edit
+                    state.seriesMode = false;
+                    
+                    // UI Updates
                     ui.seriesBtn.classList.remove('bg-green-600/80', 'border-green-400', 'text-green-100');
                     ui.seriesBtn.classList.add('bg-black/40', 'border-white/20');
-                    state.seriesCaptions = null;
                     if(navigator.vibrate) navigator.vibrate(50);
+
+                    // Check if we captured anything
+                    if (state.currentSeriesIds.size > 0) {
+                        // Transfer series IDs to selection for editing
+                        state.selectedIds = new Set(state.currentSeriesIds);
+                        state.currentSeriesIds.clear(); // Clear tracking immediately so highlights disappear
+                        
+                        // Open Batch Modal
+                        ui.batchCountLabel.innerText = `${state.selectedIds.size} Captured`;
+                        ui.groupInputs.forEach(i => i.value = '');
+                        ui.batchModal.classList.remove('hidden');
+                        
+                        // We do NOT toggleSelectMode() here because we want to act as if we just entered edit mode.
+                        // renderGallery below will show them as 'selected' (blue) instead of 'series' (green)
+                    }
+                    renderGallery();
                 }
             };
 
@@ -934,7 +972,6 @@
                     const p = state.photos.find(ph => ph.id === state.editingId); 
                     const c1 = ui.inputs.c1.value; const c2 = ui.inputs.c2.value; const c3 = ui.inputs.c3.value; const meta = ui.inputs.meta.value;
                     p.captions.c1 = c1; p.captions.c2 = c2; p.captions.c3 = c3; p.metaNote = meta; 
-                    if (state.seriesMode) { state.seriesCaptions = { c1, c2, c3, metaNote: meta }; }
                     await processPhotoVisuals(p); 
                     await DB.add('photos', await prepPhotoForSave(p)); 
                     renderGallery(); 
@@ -961,8 +998,8 @@
             ui.deleteSingleBtn.onclick = async () => { if(confirm("Delete this photo?")) { await DB.delete('photos', state.editingId); state.photos = state.photos.filter(p=>p.id!==state.editingId); ui.previewModal.classList.add('hidden'); renderGallery(); } };
             ui.downloadSingleBtn.onclick = async () => { const p = state.photos.find(ph => ph.id === state.editingId); if(p) saveAs(p.finalBlob, `IMG_${p.id}.jpg`); };
             ui.openBatchBtn.onclick = () => { if(state.selectedIds.size === 0) return alert("Select photos first."); ui.batchCountLabel.innerText = `${state.selectedIds.size} Selected`; ui.groupInputs.forEach(i => i.value = ''); ui.batchModal.classList.remove('hidden'); };
-            ui.cancelBatchBtn.onclick = () => ui.batchModal.classList.add('hidden');
-            ui.applyBatchBtn.onclick = async () => { const [c1, c2, c3, n] = ui.groupInputs.map(i => i.value); if(!c1 && !c2 && !c3 && !n) return ui.batchModal.classList.add('hidden'); ui.batchModal.classList.add('hidden'); setProcessing(true); await new Promise(r => setTimeout(r, 50)); for (const id of state.selectedIds) { const p = state.photos.find(ph => ph.id === id); if(p) { if(c1) p.captions.c1 = c1; if(c2) p.captions.c2 = c2; if(c3) p.captions.c3 = c3; if(n) p.metaNote = n; await processPhotoVisuals(p); await DB.add('photos', await prepPhotoForSave(p)); } } setProcessing(false); toggleSelectMode(); };
+            ui.cancelBatchBtn.onclick = () => { ui.batchModal.classList.add('hidden'); state.selectedIds.clear(); renderGallery(); };
+            ui.applyBatchBtn.onclick = async () => { const [c1, c2, c3, n] = ui.groupInputs.map(i => i.value); if(!c1 && !c2 && !c3 && !n) return ui.batchModal.classList.add('hidden'); ui.batchModal.classList.add('hidden'); setProcessing(true); await new Promise(r => setTimeout(r, 50)); for (const id of state.selectedIds) { const p = state.photos.find(ph => ph.id === id); if(p) { if(c1) p.captions.c1 = c1; if(c2) p.captions.c2 = c2; if(c3) p.captions.c3 = c3; if(n) p.metaNote = n; await processPhotoVisuals(p); await DB.add('photos', await prepPhotoForSave(p)); } } setProcessing(false); state.selectedIds.clear(); renderGallery(); };
             ui.toggleSelect.onclick = toggleSelectMode; ui.cancelSelectBtn.onclick = toggleSelectMode;
 
             ui.backupBtn.onclick = async () => { setProcessing(true); try { const blob = await createBackupBlob(); saveAs(blob, `Backup.json`); } catch(e){ alert("Backup Failed: "+e.message); } setProcessing(false); };
@@ -1028,7 +1065,9 @@
             localStorage.setItem('fc_num', state.settings.nextNum); 
             
             let c1 = state.settings.defC1; let c2 = state.settings.defC2; let c3 = state.settings.defC3; let metaNote = "";
-            if (state.seriesMode && state.seriesCaptions) { c1 = state.seriesCaptions.c1; c2 = state.seriesCaptions.c2; c3 = state.seriesCaptions.c3; metaNote = state.seriesCaptions.metaNote; }
+            
+            // Standard capture logic (No pre-filling in Series Mode anymore)
+            // But we will skip the individual editor if series mode is active
 
             const photo = { 
                 id: Date.now(), originalBlob: blob, displayUrl: null, 
@@ -1044,9 +1083,16 @@
             const safeP = await prepPhotoForSave(photo);
             await DB.add('photos', safeP); 
             state.photos.unshift(photo); 
-            renderGallery();
             
-            if (state.seriesMode && state.seriesCaptions) { if(navigator.vibrate) navigator.vibrate(50); } else { openEditor(photo.id); }
+            // If in Series Mode, track it and skip editor
+            if (state.seriesMode) {
+                state.currentSeriesIds.add(photo.id);
+                if(navigator.vibrate) navigator.vibrate(50);
+                renderGallery(); // Re-render to show series highlight
+            } else {
+                renderGallery();
+                openEditor(photo.id);
+            }
         }
 
         async function processPhotoVisuals(p) {
