@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Field Cam">
-    <title>Field Cam Pro (v3.2)</title>
+    <title>Field Cam Pro (v3.3)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -80,8 +80,24 @@
     <!-- MODULE 1: CAMERA -->
     <section id="module-camera" class="flex-1 flex flex-col md:flex-row overflow-hidden relative">
         <div id="camera-container" class="relative h-[45%] md:h-full md:flex-1 flex flex-col items-center justify-center bg-black overflow-hidden bg-gray-900">
+            <!-- Video for Stream Mode -->
             <video id="video" autoplay playsinline muted class="w-full h-full object-cover"></video>
+            
+            <!-- Placeholder for Native Mode -->
+            <div id="native-mode-placeholder" class="hidden absolute inset-0 flex flex-col items-center justify-center bg-gray-900 text-gray-400 z-10 p-6 text-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mb-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                <h3 class="text-lg font-bold text-white mb-2">Native Camera Active</h3>
+                <p class="text-xs max-w-xs">Tap the shutter button below to launch your device's camera app for high-quality capture.</p>
+            </div>
+
             <canvas id="canvas" class="hidden"></canvas>
+            
+            <!-- Hidden Input for Native Capture -->
+            <input type="file" id="native-cam-input" accept="image/*" capture="environment" class="hidden">
+
             <div id="flash-element" class="flash-overlay"></div>
             <div id="compass-overlay" class="absolute top-4 right-4 bg-black/50 backdrop-blur px-2 py-1 rounded text-xs font-mono hidden pointer-events-none z-10"><span id="compass-text">--°</span></div>
             <button id="torch-btn" class="absolute top-4 left-4 p-3 bg-black/40 backdrop-blur rounded-full text-white border border-white/20 hidden z-10 hover:bg-black/60"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg></button>
@@ -181,7 +197,15 @@
                 <h3 class="text-xs font-bold text-blue-400 uppercase tracking-wider mb-2">Camera & Image</h3>
                 
                 <div class="flex items-center justify-between">
-                    <span class="text-sm">Camera Resolution</span>
+                    <span class="text-sm">Use Native Camera App</span>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="set-native-cam" class="sr-only peer">
+                        <div class="w-11 h-6 bg-gray-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 peer-checked:bg-blue-600"></div>
+                    </label>
+                </div>
+
+                <div class="flex items-center justify-between">
+                    <span class="text-sm">Stream Resolution (Web Mode)</span>
                     <select id="set-cam-res" class="bg-gray-900 text-white text-xs rounded p-2 border border-gray-600">
                         <option value="max" selected>Max (4K if avail)</option>
                         <option value="high">High (1080p)</option>
@@ -392,7 +416,8 @@
                 tempUnit: localStorage.getItem('fc_unit') || "F",
                 gpsFmt: localStorage.getItem('fc_gps') || "dec",
                 haptic: localStorage.getItem('fc_hap') !== "false",
-                camRes: localStorage.getItem('fc_camRes') || "max"
+                camRes: localStorage.getItem('fc_camRes') || "max",
+                nativeCam: localStorage.getItem('fc_nativeCam') === "true" // New setting
             }
         };
 
@@ -410,7 +435,7 @@
             sPid: document.getElementById('set-proj-id'), sAuth: document.getElementById('set-author'), sNum: document.getElementById('set-next-num'),
             sC1: document.getElementById('set-def-c1'), sC2: document.getElementById('set-def-c2'), sC3: document.getElementById('set-def-c3'),
             sBurn: document.getElementById('set-burn-in'), sFont: document.getElementById('set-font-scale'), sJpeg: document.getElementById('set-jpeg-q'),
-            sRes: document.getElementById('set-cam-res'),
+            sRes: document.getElementById('set-cam-res'), sNative: document.getElementById('set-native-cam'),
             sComp: document.getElementById('set-compass-ui'), sRTitle: document.getElementById('set-report-title'), sPlay: document.getElementById('set-pdf-layout'),
             sPres: document.getElementById('set-pdf-res'), sImap: document.getElementById('set-inc-map'), sInotes: document.getElementById('set-inc-notes'),
             sUnitC: document.getElementById('set-unit-c'), sUnitF: document.getElementById('set-unit-f'), sGps: document.getElementById('set-gps-fmt'), sHap: document.getElementById('set-haptic'),
@@ -429,7 +454,8 @@
             cameraContainer: document.getElementById('camera-container'), notesList: document.getElementById('notes-list'), newNoteInput: document.getElementById('new-note-input'), 
             addNoteBtn: document.getElementById('add-note-btn'), cancelNoteEditBtn: document.getElementById('cancel-note-edit-btn'), exportNotesBtn: document.getElementById('export-notes-btn'), newVisitBtn: document.getElementById('new-visit-btn'),
             mapContainer: document.getElementById('map-container'), mapPhotoCount: document.getElementById('map-photo-count'),
-            exportPdfBtn: document.getElementById('export-pdf-btn'), exportPdfGalleryBtn: document.getElementById('export-pdf-gallery-btn')
+            exportPdfBtn: document.getElementById('export-pdf-btn'), exportPdfGalleryBtn: document.getElementById('export-pdf-gallery-btn'),
+            nativeInput: document.getElementById('native-cam-input'), nativePlaceholder: document.getElementById('native-mode-placeholder')
         };
 
         // --- Helpers ---
@@ -653,6 +679,7 @@
             ui.sC1.value = s.defC1; ui.sC2.value = s.defC2; ui.sC3.value = s.defC3;
             ui.sBurn.checked = s.burnIn; ui.sFont.value = s.fontScale; ui.sJpeg.value = s.jpegQ; 
             ui.sRes.value = s.camRes;
+            ui.sNative.checked = s.nativeCam;
             ui.sComp.checked = s.compassUi;
             ui.sRTitle.value = s.reportTitle; ui.sPlay.value = s.pdfLayout; ui.sPres.value = s.pdfRes;
             ui.sImap.checked = s.incMap; ui.sInotes.checked = s.incNotes;
@@ -662,6 +689,7 @@
         function saveSettingsUI() {
             const s = state.settings;
             const oldRes = s.camRes;
+            const oldNative = s.nativeCam;
             
             s.projectId = ui.sPid.value.trim(); s.author = ui.sAuth.value.trim(); s.nextNum = parseInt(ui.sNum.value) || 1;
             s.defC1 = ui.sC1.value.trim(); s.defC2 = ui.sC2.value.trim(); s.defC3 = ui.sC3.value.trim();
@@ -669,17 +697,18 @@
             s.reportTitle = ui.sRTitle.value.trim(); s.pdfLayout = parseInt(ui.sPlay.value); s.pdfRes = parseInt(ui.sPres.value);
             s.incMap = ui.sImap.checked; s.incNotes = ui.sInotes.checked; s.gpsFmt = ui.sGps.value; s.haptic = ui.sHap.checked;
             s.camRes = ui.sRes.value;
+            s.nativeCam = ui.sNative.checked;
             
             // Save to LocalStorage
-            Object.keys(s).forEach(k => localStorage.setItem('fc_'+(k === 'projectId'?'pid':k === 'author'?'auth':k === 'nextNum'?'num':k==='defC1'?'c1':k==='defC2'?'c2':k==='defC3'?'c3':k==='burnIn'?'burn':k==='fontScale'?'font':k==='jpegQ'?'jq':k==='compassUi'?'comp':k==='reportTitle'?'rt':k==='pdfLayout'?'play':k==='pdfRes'?'pres':k==='incMap'?'imap':k==='incNotes'?'inotes':k==='tempUnit'?'unit':k==='gpsFmt'?'gps':k==='camRes'?'camRes':'hap'), s[k]));
+            Object.keys(s).forEach(k => localStorage.setItem('fc_'+(k === 'projectId'?'pid':k === 'author'?'auth':k === 'nextNum'?'num':k==='defC1'?'c1':k==='defC2'?'c2':k==='defC3'?'c3':k==='burnIn'?'burn':k==='fontScale'?'font':k==='jpegQ'?'jq':k==='compassUi'?'comp':k==='reportTitle'?'rt':k==='pdfLayout'?'play':k==='pdfRes'?'pres':k==='incMap'?'imap':k==='incNotes'?'inotes':k==='tempUnit'?'unit':k==='gpsFmt'?'gps':k==='camRes'?'camRes':k==='nativeCam'?'nativeCam':'hap'), s[k]));
             
             // Apply
             updateProjectDisplay();
             ui.compassOverlay.classList.toggle('hidden', !s.compassUi);
             ui.projectModal.classList.add('hidden');
             
-            // Re-init camera if resolution changed
-            if (oldRes !== s.camRes) {
+            // Re-init camera if required
+            if (oldRes !== s.camRes || oldNative !== s.nativeCam) {
                 initCamera();
             }
         }
@@ -707,6 +736,12 @@
         
         // --- Capture & Processing ---
         async function capturePhoto() {
+            // Check native mode
+            if (state.settings.nativeCam) {
+                ui.nativeInput.click();
+                return;
+            }
+
             if (state.isProcessing) return; setProcessing(true, "Capturing..."); triggerFlash();
             if(state.settings.haptic && navigator.vibrate) navigator.vibrate(50);
             try {
@@ -714,29 +749,47 @@
                 if (state.nativeResSupported && state.imageCapture) try { blob = await state.imageCapture.takePhoto(); } catch (e) {}
                 if (!blob) { ui.canvas.width = ui.video.videoWidth; ui.canvas.height = ui.video.videoHeight; ui.canvas.getContext('2d').drawImage(ui.video, 0, 0); blob = await new Promise(r => ui.canvas.toBlob(r, 'image/jpeg', 0.95)); }
                 
-                const currentNum = state.settings.nextNum;
-                state.settings.nextNum++;
-                localStorage.setItem('fc_num', state.settings.nextNum); // Auto-save counter
-
-                const photo = { 
-                    id: Date.now(), originalBlob: blob, displayUrl: null, 
-                    captions: { c1: state.settings.defC1, c2: state.settings.defC2, c3: state.settings.defC3 }, metaNote: "", 
-                    timestamp: new Date().toLocaleString(), 
-                    location: formatGPS(state.currentLat, state.currentLon), 
-                    lat: state.currentLat, lon: state.currentLon,
-                    projectId: state.settings.projectId, compass: state.heading ? ui.compassText.textContent : "",
-                    weather: state.weather, photoNumber: currentNum
-                };
-                await processPhotoVisuals(photo); 
-                const safeP = await prepPhotoForSave(photo);
-                await DB.add('photos', safeP); 
-                state.photos.unshift(photo); 
-                renderGallery();
-                
-                // NEW: Auto-open editor
-                openEditor(photo.id);
+                await handleCapturedBlob(blob);
             } catch (err) { alert("Failed capture: " + err); } finally { setProcessing(false); }
         }
+
+        // New helper to unify capture path
+        async function handleCapturedBlob(blob) {
+            const currentNum = state.settings.nextNum;
+            state.settings.nextNum++;
+            localStorage.setItem('fc_num', state.settings.nextNum); 
+
+            const photo = { 
+                id: Date.now(), originalBlob: blob, displayUrl: null, 
+                captions: { c1: state.settings.defC1, c2: state.settings.defC2, c3: state.settings.defC3 }, metaNote: "", 
+                timestamp: new Date().toLocaleString(), 
+                location: formatGPS(state.currentLat, state.currentLon), 
+                lat: state.currentLat, lon: state.currentLon,
+                projectId: state.settings.projectId, compass: state.heading ? ui.compassText.textContent : "",
+                weather: state.weather, photoNumber: currentNum
+            };
+            await processPhotoVisuals(photo); 
+            const safeP = await prepPhotoForSave(photo);
+            await DB.add('photos', safeP); 
+            state.photos.unshift(photo); 
+            renderGallery();
+            openEditor(photo.id);
+        }
+
+        // Handle Native Input Change
+        ui.nativeInput.onchange = async (e) => {
+            if (e.target.files && e.target.files[0]) {
+                setProcessing(true, "Processing Native Photo...");
+                try {
+                    await handleCapturedBlob(e.target.files[0]);
+                } catch(e) {
+                    alert("Error processing native photo: " + e.message);
+                } finally {
+                    setProcessing(false);
+                    ui.nativeInput.value = ''; // Reset for next capture
+                }
+            }
+        };
 
         async function processPhotoVisuals(p) {
             const img = await createImageFromBlob(p.originalBlob || p.finalBlob);
@@ -892,14 +945,28 @@
         function initLocation() { if(!navigator.geolocation) return; navigator.geolocation.watchPosition(p=>{ state.currentLat=p.coords.latitude; state.currentLon=p.coords.longitude; state.currentLocation=formatGPS(state.currentLat, state.currentLon); ui.locationText.innerText=state.currentLocation; ui.gpsStatus.classList.add('text-green-400'); if(!state.weather) fetchWeather(state.currentLat, state.currentLon); }, ()=>{ ui.gpsStatus.classList.add('text-red-400'); }, {enableHighAccuracy:true}); }
         function enableCompass() { if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') { DeviceOrientationEvent.requestPermission().then(r => { if (r=='granted') startCompassListener(); }).catch(console.error); } else startCompassListener(); }
         function startCompassListener() { window.addEventListener('deviceorientation', (e) => { let h = e.webkitCompassHeading || Math.abs(e.alpha - 360); if (h) { state.heading = Math.round(h); ui.compassText.textContent = `${['N','NE','E','SE','S','SW','W','NW'][Math.round(state.heading/45)%8]} ${state.heading}°`; } }); state.compassEnabled = true; ui.compassOverlay.classList.remove('hidden'); }
+        
         async function initCamera() {
             if (!window.isSecureContext) console.warn("HTTPS likely required for Camera.");
             
-            // Cleanup existing stream
+            // 1. Cleanup existing stream
             if (state.videoStream) {
                 state.videoStream.getTracks().forEach(track => track.stop());
+                state.videoStream = null;
             }
 
+            // 2. Check if Native Mode is ON
+            if (state.settings.nativeCam) {
+                ui.video.classList.add('hidden');
+                ui.nativePlaceholder.classList.remove('hidden');
+                ui.torchBtn.classList.add('hidden');
+                return; // Stop here, don't request getUserMedia
+            } else {
+                ui.video.classList.remove('hidden');
+                ui.nativePlaceholder.classList.add('hidden');
+            }
+
+            // 3. Web Mode Initialization
             const camRes = state.settings.camRes || 'max';
             let widthConstraint = { ideal: 3840 }; // Max
             if (camRes === 'high') widthConstraint = { ideal: 1920 };
@@ -930,6 +997,7 @@
                 } 
             } catch(e) { document.getElementById('error-display').classList.remove('hidden'); }
         }
+
         function setupPinchZoom(track) {
             const settings = { min: track.getCapabilities().zoom.min, max: track.getCapabilities().zoom.max, step: track.getCapabilities().zoom.step, current: track.getSettings().zoom || 1 };
             let startDist = 0, startZoom = 0; const getDist = (t) => Math.hypot(t[0].pageX - t[1].pageX, t[0].pageY - t[1].pageY);
