@@ -432,6 +432,7 @@
             photos: [], notes: [], selectedIds: new Set(), isSelectMode: false, currentLocation: "Locating...", currentLat:0, currentLon:0, 
             seriesMode: false, currentSeriesIds: new Set(), seriesCaptions: null, searchQuery: "", filterStart: null, filterEnd: null,
             userProjects: [],
+            editingNoteId: null, // Track which note is being edited
             settings: {
                 projectId: localStorage.getItem('fc_pid') || "default-project", // Default ID
                 cloudEnabled: localStorage.getItem('fc_cloud') === 'true',
@@ -473,7 +474,7 @@
             downloadProjectBtn: document.getElementById('download-project-btn'), backupBtn: document.getElementById('backup-btn')
         };
 
-        // --- EXPORT FUNCTIONS ---
+        // --- EXPORT FUNCTIONS (Defined Globally) ---
         function exportNotes() {
             if (state.notes.length === 0) return showAlert("No notes to export.");
             const csvContent = "data:text/csv;charset=utf-8," 
@@ -717,6 +718,8 @@
         // Expose to global
         window.switchProject = switchProject;
         window.deleteProject = deleteProject;
+        window.editNote = editNote;
+        window.deleteNote = deleteNote;
 
         // --- Rest of standard logic ---
         function updateAuthUI() {
@@ -892,11 +895,43 @@
             ui.notesList.innerHTML = '';
             const filtered = state.notes.filter(n => n.projectId === state.settings.projectId);
             filtered.sort((a,b)=>b.id-a.id).forEach(n => {
-                const div = document.createElement('div'); div.className = 'bg-gray-800 p-3 rounded border border-gray-700 mb-2';
-                div.innerHTML = `<div class="flex justify-between text-[10px] text-gray-400"><span>${n.timestamp}</span><span>${n.location}</span></div><p class="text-sm text-gray-200">${n.text}</p>`;
+                const div = document.createElement('div'); div.className = 'bg-gray-800 p-3 rounded border border-gray-700 mb-2 relative group';
+                div.innerHTML = `
+                    <div class="flex justify-between text-[10px] text-gray-400"><span>${n.timestamp}</span><span>${n.location}</span></div>
+                    <p class="text-sm text-gray-200 whitespace-pre-wrap">${n.text}</p>
+                    <div class="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                         <button onclick="window.editNote(${n.id})" class="text-blue-400 hover:text-white p-1"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg></button>
+                         <button onclick="window.deleteNote(${n.id})" class="text-red-400 hover:text-red-300 p-1"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></button>
+                    </div>
+                `;
                 ui.notesList.appendChild(div);
             });
         }
+        
+        function editNote(id) {
+            const note = state.notes.find(n => n.id === id);
+            if (!note) return;
+            state.editingNoteId = id;
+            ui.newNoteInput.value = note.text;
+            ui.addNoteBtn.innerText = "Update Note";
+            ui.cancelNoteEditBtn.classList.remove('hidden');
+            ui.newNoteInput.focus();
+        }
+
+        async function deleteNote(id) {
+             if(!await showConfirm("Delete this note?")) return;
+             await DB.delete('notes', id);
+             state.notes = state.notes.filter(n => n.id !== id);
+             renderNotes();
+        }
+        
+        function resetNoteInput() {
+            state.editingNoteId = null;
+            ui.newNoteInput.value = '';
+            ui.addNoteBtn.innerText = "Add Note";
+            ui.cancelNoteEditBtn.classList.add('hidden');
+        }
+
         function openEditor(id) { const p = state.photos.find(x => x.id === id); if(p) { state.editingId=id; ui.previewImg.src=p.displayUrl; ui.inputs.c1.value=p.captions.c1||""; ui.inputs.c2.value=p.captions.c2||""; ui.inputs.c3.value=p.captions.c3||""; ui.previewModal.classList.remove('hidden'); } }
 
         // Core Actions
@@ -931,32 +966,84 @@
             };
             await processPhotoVisuals(photo);
             
-            // Try uploading immediately
+            // 1. Save Locally FIRST (Prevents onSnapshot race condition duplicates)
+            const safeP = await prepPhotoForSave(photo);
+            await DB.add('photos', safeP); 
+            state.photos.unshift(photo); 
+            renderGallery(); 
+            openEditor(photo.id);
+
+            // 2. Try uploading immediately
             if (state.settings.cloudEnabled && user) {
                 const previewB64 = await compressForCloud(photo.finalBlob);
                 const cloudData = { ...photo, preview_b64: previewB64, synced: true };
                 delete cloudData.originalBlob; delete cloudData.finalBlob; delete cloudData.displayUrl;
                 const success = await uploadToCloud('shared_photos', photo.id, cloudData);
-                if (success) photo.synced = true; // Mark true if successful
+                
+                if (success) {
+                    // Update status to synced
+                    photo.synced = true;
+                    safeP.synced = true;
+                    await DB.add('photos', safeP); // Update DB
+                    renderGallery(); // Re-render to remove pending icon
+                }
             }
-            
-            const safeP = await prepPhotoForSave(photo);
-            await DB.add('photos', safeP); state.photos.unshift(photo); renderGallery(); openEditor(photo.id);
         }
 
         async function saveNote() {
-            const text = ui.newNoteInput.value.trim(); if (!text) return;
-            const note = { id: Date.now(), text: text, timestamp: new Date().toLocaleString(), location: state.currentLocation, projectId: state.settings.projectId, synced: false };
-            
-            // Try upload immediately
-            if(state.settings.cloudEnabled && user) {
-                 const success = await uploadToCloud('shared_notes', note.id, { ...note, synced: true });
-                 if(success) note.synced = true;
-            }
-            
-            await DB.add('notes', note); state.notes.unshift(note); renderNotes(); ui.newNoteInput.value = '';
-        }
+            const text = ui.newNoteInput.value.trim(); 
+            if (!text) return;
 
+            if (state.editingNoteId) {
+                // UPDATE EXISTING
+                const note = state.notes.find(n => n.id === state.editingNoteId);
+                if (note) {
+                    note.text = text;
+                    note.synced = false; // Mark for re-sync
+                    
+                    // Update in Arrays/DB
+                    await DB.add('notes', note);
+                    
+                    // Try cloud update
+                    if(state.settings.cloudEnabled && user) {
+                        const success = await uploadToCloud('shared_notes', note.id, { ...note, synced: true });
+                        if(success) {
+                            note.synced = true;
+                            await DB.add('notes', note);
+                        }
+                    }
+                    
+                    renderNotes();
+                    resetNoteInput(); // Clear UI
+                }
+            } else {
+                // CREATE NEW
+                const note = { 
+                    id: Date.now(), 
+                    text: text, 
+                    timestamp: new Date().toLocaleString(), 
+                    location: state.currentLocation || "No GPS", // Fallback just in case
+                    projectId: state.settings.projectId, 
+                    synced: false 
+                };
+                
+                // 1. Save Locally FIRST
+                await DB.add('notes', note); 
+                state.notes.unshift(note); 
+                renderNotes(); 
+                ui.newNoteInput.value = '';
+    
+                // 2. Try upload immediately
+                if(state.settings.cloudEnabled && user) {
+                     const success = await uploadToCloud('shared_notes', note.id, { ...note, synced: true });
+                     if(success) {
+                         note.synced = true;
+                         await DB.add('notes', note);
+                     }
+                }
+            }
+        }
+        
         function loadSettingsUI() {
             ui.sAuth.value = state.settings.author; ui.sNum.value = state.settings.nextNum; ui.sC1.value = state.settings.defC1; ui.sC2.value = state.settings.defC2; ui.sC3.value = state.settings.defC3; ui.sBurn.checked = state.settings.burnIn; ui.sFont.value = state.settings.fontScale; ui.sComp.checked = state.settings.compassUi; ui.sPlay.value = state.settings.pdfLayout; ui.sPres.value = state.settings.pdfRes; ui.sImap.checked = state.settings.incMap; ui.sInotes.checked = state.settings.incNotes; ui.sGps.value = state.settings.gpsFmt;
             if(user) { ui.projectListContainer.classList.remove('hidden'); }
@@ -996,6 +1083,8 @@
             ui.snapBtn.onclick = () => ui.nativeInput.click();
             ui.nativeInput.onchange = (e) => { if(e.target.files[0]) handleCapturedBlob(e.target.files[0]); };
             ui.addNoteBtn.onclick = saveNote;
+            ui.cancelNoteEditBtn.onclick = resetNoteInput;
+
             ui.navCamera.onclick = () => { ui.modCamera.classList.remove('hidden'); ui.modNotes.classList.add('hidden'); ui.modMap.classList.add('hidden'); };
             ui.navNotes.onclick = () => { ui.modCamera.classList.add('hidden'); ui.modNotes.classList.remove('hidden'); ui.modMap.classList.add('hidden'); };
             ui.navMap.onclick = () => { ui.modCamera.classList.add('hidden'); ui.modNotes.classList.add('hidden'); ui.modMap.classList.remove('hidden'); };
