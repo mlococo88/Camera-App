@@ -924,11 +924,52 @@
             ui.closeBtn.onclick = () => ui.previewModal.classList.add('hidden');
             
             // Reattach standard listeners
-            if(ui.downloadProjectBtn) ui.downloadProjectBtn.onclick = () => { setProcessing(true); setTimeout(()=>{setProcessing(false); showAlert("Download feature placeholder");},1000); };
+            if(ui.downloadProjectBtn) ui.downloadProjectBtn.onclick = downloadProject;
             if(ui.exportNotesBtn) ui.exportNotesBtn.onclick = exportNotes;
             if(ui.exportPdfBtn) ui.exportPdfBtn.onclick = generatePDFReport;
             if(ui.exportPdfGalleryBtn) ui.exportPdfGalleryBtn.onclick = generatePDFReport;
-            // (Simplified re-attachment of others for brevity, assume maintained)
+            if(ui.downloadAll) ui.downloadAll.onclick = () => downloadZip(null);
+            if(ui.downloadSelected) ui.downloadSelected.onclick = () => downloadZip(state.selectedIds);
+            if(ui.deleteSelected) ui.deleteSelected.onclick = async () => { if(await showConfirm("Delete selected items?")) { for(let id of state.selectedIds) await DB.delete('photos', id); state.photos = state.photos.filter(p=>!state.selectedIds.has(p.id)); state.selectedIds.clear(); renderGallery(); } };
+            if(ui.deleteSingleBtn) ui.deleteSingleBtn.onclick = async () => { if(await showConfirm("Delete this photo?")) { await DB.delete('photos', state.editingId); state.photos = state.photos.filter(p=>p.id!==state.editingId); ui.previewModal.classList.add('hidden'); renderGallery(); } };
+            if(ui.newVisitBtn) ui.newVisitBtn.onclick = async () => { if(await showConfirm("Reset project?")) { await DB.clear('photos'); await DB.clear('notes'); state.photos=[]; state.notes=[]; state.selectedIds.clear(); state.settings.nextNum=1; localStorage.setItem('fc_num',1); renderGallery(); renderNotes(); loadSettingsUI(); } };
+            if(ui.openBatchBtn) ui.openBatchBtn.onclick = () => { if(state.selectedIds.size === 0) return showAlert("Select photos first."); ui.batchCountLabel.innerText = `${state.selectedIds.size} Selected`; ui.groupInputs.forEach(i => {if(i) i.value = '';}); ui.batchModal.classList.remove('hidden'); };
+            if(ui.cancelBatchBtn) ui.cancelBatchBtn.onclick = () => { ui.batchModal.classList.add('hidden'); state.selectedIds.clear(); renderGallery(); };
+            if(ui.applyBatchBtn) ui.applyBatchBtn.onclick = async () => { 
+                const [c1, c2, c3, n] = ui.groupInputs.map(i => i ? i.value : ""); 
+                if(ui.batchModal) ui.batchModal.classList.add('hidden'); 
+                setProcessing(true); await new Promise(r => setTimeout(r, 50)); 
+                for (const id of state.selectedIds) { 
+                    const p = state.photos.find(ph => ph.id === id); 
+                    if(p) { if(c1) p.captions.c1 = c1; if(c2) p.captions.c2 = c2; if(c3) p.captions.c3 = c3; if(n) p.metaNote = n; await processPhotoVisuals(p); await DB.add('photos', await prepPhotoForSave(p)); } 
+                } 
+                setProcessing(false); state.selectedIds.clear(); renderGallery(); 
+            };
+            if(ui.saveBtn.onclick === null) ui.saveBtn.onclick = async () => { 
+                if (!state.editingId) return; 
+                setProcessing(true); await new Promise(r=>setTimeout(r,50)); 
+                try { 
+                    const p = state.photos.find(ph => ph.id === state.editingId); 
+                    const c1 = ui.inputs.c1.value; const c2 = ui.inputs.c2.value; const c3 = ui.inputs.c3.value; const meta = ui.inputs.meta.value; 
+                    p.captions.c1 = c1; p.captions.c2 = c2; p.captions.c3 = c3; p.metaNote = meta; 
+                    await processPhotoVisuals(p); await DB.add('photos', await prepPhotoForSave(p)); renderGallery(); ui.previewModal.classList.add('hidden'); 
+                } catch(e) { showAlert("Save error: " + e.message); } 
+                setProcessing(false); 
+            };
+            if(ui.quickShareBtn) ui.quickShareBtn.onclick = downloadProject;
+            if(ui.searchInput) ui.searchInput.oninput = (e) => { state.searchQuery = e.target.value.toLowerCase(); renderGallery(); };
+            if(ui.filterBtn && ui.filterPanel) ui.filterBtn.onclick = () => ui.filterPanel.classList.toggle('hidden');
+            if(ui.dateStart) ui.dateStart.onchange = (e) => { state.filterStart = e.target.value; renderGallery(); };
+            if(ui.dateEnd) ui.dateEnd.onchange = (e) => { state.filterEnd = e.target.value; renderGallery(); };
+            if(ui.seriesBtn) ui.seriesBtn.onclick = () => {
+                state.seriesMode = !state.seriesMode;
+                if(state.seriesMode) { 
+                    state.currentSeriesIds = new Set(); ui.seriesBtn.classList.add('bg-green-600/80'); ui.seriesIndicator.classList.add('bg-green-400','animate-pulse');
+                } else {
+                    ui.seriesBtn.classList.remove('bg-green-600/80'); ui.seriesIndicator.classList.remove('bg-green-400','animate-pulse');
+                    if (state.currentSeriesIds.size > 0) { state.selectedIds = new Set(state.currentSeriesIds); state.currentSeriesIds.clear(); ui.batchCountLabel.innerText = `${state.selectedIds.size} Captured`; ui.batchModal.classList.remove('hidden'); }
+                }
+            };
         }
 
         function generateMapHTML(photos) {
