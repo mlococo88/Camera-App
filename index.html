@@ -433,6 +433,7 @@
             seriesMode: false, currentSeriesIds: new Set(), seriesCaptions: null, searchQuery: "", filterStart: null, filterEnd: null,
             userProjects: [],
             editingNoteId: null, // Track which note is being edited
+            lastWeatherFetch: 0, // Cache timestamp
             settings: {
                 projectId: localStorage.getItem('fc_pid') || "default-project", // Default ID
                 cloudEnabled: localStorage.getItem('fc_cloud') === 'true',
@@ -474,7 +475,7 @@
             downloadProjectBtn: document.getElementById('download-project-btn'), backupBtn: document.getElementById('backup-btn')
         };
 
-        // --- EXPORT FUNCTIONS (Defined Globally) ---
+        // --- EXPORT FUNCTIONS ---
         function exportNotes() {
             if (state.notes.length === 0) return showAlert("No notes to export.");
             const csvContent = "data:text/csv;charset=utf-8," 
@@ -715,12 +716,6 @@
             ui.projectIdDisplay.innerText = name;
         }
 
-        // Expose to global
-        window.switchProject = switchProject;
-        window.deleteProject = deleteProject;
-        window.editNote = editNote;
-        window.deleteNote = deleteNote;
-
         // --- Rest of standard logic ---
         function updateAuthUI() {
             if(user) {
@@ -882,7 +877,52 @@
         }
 
         // --- Standard Logic ---
-        function initLocation() { if(navigator.geolocation) navigator.geolocation.watchPosition(p=>{ state.currentLat=p.coords.latitude; state.currentLon=p.coords.longitude; ui.locationText.innerText=`${p.coords.latitude.toFixed(5)}, ${p.coords.longitude.toFixed(5)}`; },()=>{}); }
+        function initLocation() { 
+            if(!navigator.geolocation) {
+                ui.locationText.innerText = "GPS Not Supported";
+                return;
+            }
+
+            const options = { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 };
+            const success = (p) => {
+                state.currentLat = p.coords.latitude; 
+                state.currentLon = p.coords.longitude; 
+                state.currentLocation = formatGPS(state.currentLat, state.currentLon); 
+                ui.locationText.innerText = state.currentLocation; 
+                ui.gpsStatus.classList.remove('text-red-500', 'text-yellow-500'); ui.gpsStatus.classList.add('text-green-400'); 
+                if(!state.weather) fetchWeather(state.currentLat, state.currentLon); 
+            };
+            const error = (err) => {
+                console.warn(`GPS Error (${err.code}): ${err.message}`);
+                ui.gpsStatus.classList.remove('text-green-400'); ui.gpsStatus.classList.add('text-red-500');
+                let msg = "GPS Error";
+                switch(err.code) { case 1: msg = "GPS Denied"; break; case 2: msg = "GPS Unavail"; break; case 3: msg = "GPS Timeout"; break; }
+                ui.locationText.innerText = msg;
+                if (err.code === 3) { ui.gpsStatus.classList.add('text-yellow-500'); ui.locationText.innerText = "Low Accuracy..."; navigator.geolocation.getCurrentPosition(success, null, { enableHighAccuracy: false }); }
+            };
+            navigator.geolocation.watchPosition(success, error, options); 
+        }
+
+        async function fetchWeather(lat, lon) {
+            if (state.lastWeatherFetch && (Date.now() - state.lastWeatherFetch < 300000)) return;
+            try {
+                state.lastWeatherFetch = Date.now();
+                const unit = state.settings.tempUnit === 'F' ? 'fahrenheit' : 'celsius';
+                const resp = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code&temperature_unit=${unit}`);
+                if (!resp.ok) throw new Error("Weather API fail");
+                const data = await resp.json();
+                const temp = Math.round(data.current.temperature_2m);
+                const code = data.current.weather_code;
+                const codes = { 0: "Clear", 1: "Mainly Clear", 2: "Partly Cloudy", 3: "Overcast", 45: "Fog", 48: "Depositing Rime Fog", 51: "Light Drizzle", 53: "Mod. Drizzle", 55: "Dense Drizzle", 56: "Light Freezing Drizzle", 57: "Dense Freezing Drizzle", 61: "Slight Rain", 63: "Mod. Rain", 65: "Heavy Rain", 66: "Light Freezing Rain", 67: "Heavy Freezing Rain", 71: "Slight Snow", 73: "Mod. Snow", 75: "Heavy Snow", 77: "Snow Grains", 80: "Slight Showers", 81: "Mod. Showers", 82: "Violent Showers", 85: "Slight Snow Showers", 86: "Heavy Snow Showers", 95: "Thunderstorm", 96: "Thunderstorm & Hail", 99: "Thunderstorm & Heavy Hail" };
+                const desc = codes[code] || "";
+                state.weather = `${temp}°${state.settings.tempUnit} ${desc}`;
+                if(ui.weatherStatus) ui.weatherStatus.textContent = state.weather;
+            } catch (e) {
+                console.warn("Weather fetch failed", e);
+                if(ui.weatherStatus) ui.weatherStatus.textContent = "Wx Unavailable";
+            }
+        }
+
         async function initCamera() { if (!window.isSecureContext) console.warn("HTTPS required"); }
         function setupDictation() { /* ... kept simple ... */ }
         function setProcessing(active, msg="Processing...") { ui.processingText.textContent = msg; ui.processing.classList.toggle('hidden', !active); }
@@ -1153,8 +1193,13 @@
                 } 
                 setProcessing(false); state.selectedIds.clear(); renderGallery(); 
             };
-            if(ui.saveBtn.onclick === null) ui.saveBtn.onclick = async () => { 
-                // This shouldn't be reached if the one above is set
+            if(ui.downloadSingleBtn) ui.downloadSingleBtn.onclick = async () => { 
+                const p = state.photos.find(ph => ph.id === state.editingId); 
+                if(p) {
+                    let blob = p.finalBlob;
+                    if (!blob && p.finalBuffer) blob = new Blob([p.finalBuffer], {type:'image/jpeg'});
+                    saveAs(blob, `IMG_${p.photoNumber}_${p.id}.jpg`); 
+                }
             };
             if(ui.quickShareBtn) ui.quickShareBtn.onclick = downloadProject;
             if(ui.searchInput) ui.searchInput.oninput = (e) => { state.searchQuery = e.target.value.toLowerCase(); renderGallery(); };
@@ -1191,11 +1236,6 @@
                     saveAs(blob, filename); 
                 } catch(e) { console.error(e); showAlert("Backup Failed (Likely Out of Memory). Please use ZIP export."); } finally { setProcessing(false); }
             };
-        }
-
-        function generateMapHTML(photos) {
-            const markers = photos.filter(p => p.lat && p.lon).map(p => ({ lat: p.lat, lon: p.lon, num: p.photoNumber, note: p.metaNote || "" }));
-            return `<!DOCTYPE html><html><head><title>Project Map</title><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script><style>body{margin:0;padding:0;} #map{height:100vh;width:100%;}</style></head><body><div id="map"></div><script>var map = L.map('map').setView([${markers.length ? markers[0].lat : 39.82}, ${markers.length ? markers[0].lon : -98.58}], ${markers.length ? 13 : 4});L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, attribution:'&copy; OpenStreetMap'}).addTo(map);var data = ${JSON.stringify(markers)};var group = new L.featureGroup();data.forEach(function(d){var m = L.marker([d.lat, d.lon]).addTo(map).bindPopup("<b>Photo #"+d.num+"</b><br>"+d.note);m.addTo(group);});if(data.length) map.fitBounds(group.getBounds().pad(0.1));<\/script></body></html>`;
         }
 
         window.onload = () => {
