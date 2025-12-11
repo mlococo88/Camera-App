@@ -932,7 +932,7 @@
             ui.cancelNoteEditBtn.classList.add('hidden');
         }
 
-        function openEditor(id) { const p = state.photos.find(x => x.id === id); if(p) { state.editingId=id; ui.previewImg.src=p.displayUrl; ui.inputs.c1.value=p.captions.c1||""; ui.inputs.c2.value=p.captions.c2||""; ui.inputs.c3.value=p.captions.c3||""; ui.previewModal.classList.remove('hidden'); } }
+        function openEditor(id) { const p = state.photos.find(x => x.id === id); if(p) { state.editingId=id; ui.previewImg.src=p.displayUrl; ui.inputs.c1.value=p.captions.c1||""; ui.inputs.c2.value=p.captions.c2||""; ui.inputs.c3.value=p.captions.c3||""; ui.inputs.meta.value=p.metaNote||""; ui.previewModal.classList.remove('hidden'); } }
 
         // Core Actions
         async function processPhotoVisuals(p) {
