@@ -834,20 +834,47 @@
                 snap.docChanges().forEach(async (c) => {
                     if ((c.type === "added" || c.type === "modified") && c.doc.data()._pid === pid) {
                         const d = c.doc.data();
-                        // If newer note from cloud, add it
-                        if(!state.notes.find(n=>n.id===d.id)) { state.notes.unshift(d); await DB.add('notes',d); renderNotes(); }
+                        const idx = state.notes.findIndex(n => n.id === d.id);
+                        
+                        if (idx > -1) {
+                            // UPDATE existing note
+                            state.notes[idx] = { ...state.notes[idx], ...d }; 
+                            await DB.add('notes', state.notes[idx]);
+                        } else {
+                            // ADD new note
+                            state.notes.unshift(d);
+                            await DB.add('notes', d);
+                        }
+                        renderNotes();
                     }
                 });
             });
+            
             unsubscribePhotos = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'shared_photos'), (snap) => {
                 snap.docChanges().forEach(async (c) => {
                     if ((c.type === "added" || c.type === "modified") && c.doc.data()._pid === pid) {
                         const d = c.doc.data();
-                        // Only add if we don't have it locally
-                        if(!state.photos.find(p=>p.id===d.id) && d.preview_b64) {
+                        const idx = state.photos.findIndex(p => p.id === d.id);
+
+                        if (idx > -1) {
+                            // UPDATE existing photo metadata (captions, notes) without reloading image
+                            const p = state.photos[idx];
+                            // Only update text fields to avoid flickering/reloading blobs
+                            p.captions = d.captions || p.captions;
+                            p.metaNote = d.metaNote || "";
+                            p.weather = d.weather || p.weather;
+                            p.compass = d.compass || p.compass;
+                            // Persist updates
+                            await DB.add('photos', await prepPhotoForSave(p));
+                            // Only re-render if we are not currently editing this specific photo
+                            if (state.editingId !== p.id) renderGallery();
+                        } else if (d.preview_b64) {
+                            // ADD new photo
                             const blob = await (await fetch(d.preview_b64)).blob();
                             const newP = { ...d, finalBlob: blob, displayUrl: URL.createObjectURL(blob), isCloudPreview: true, synced: true };
-                            state.photos.unshift(newP); await DB.add('photos', { ...newP, finalBuffer: await blob.arrayBuffer() }); renderGallery();
+                            state.photos.unshift(newP); 
+                            await DB.add('photos', { ...newP, finalBuffer: await blob.arrayBuffer() }); 
+                            renderGallery();
                         }
                     }
                 });
@@ -1180,6 +1207,12 @@
             restoreSession();
             updateProjectUI(state.settings.projectId);
         };
+
+        // Expose to global (Moved to end to ensure definitions exist)
+        window.switchProject = switchProject;
+        window.deleteProject = deleteProject;
+        window.editNote = editNote;
+        window.deleteNote = deleteNote;
     </script>
 </body>
 </html>
