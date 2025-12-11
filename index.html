@@ -7,9 +7,9 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Field Cam">
-    <title>Field Cam Pro (v5.5 Filter)</title>
+    <title>Field Cam Pro (v5.6 Safe)</title>
     
-    <!-- Tailwind CSS -->
+    <!-- Tailwind CSS (CDN) -->
     <script src="https://cdn.tailwindcss.com"></script>
     
     <!-- Libraries -->
@@ -18,35 +18,49 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/piexifjs/1.0.6/piexif.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     
-    <!-- Leaflet -->
+    <!-- Leaflet Map -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-    <link rel="manifest" id="my-manifest">
+    <!-- Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="manifest" id="my-manifest">
     
     <style>
-        body { font-family: 'Inter', sans-serif; height: 100dvh; overscroll-behavior-y: contain; padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); touch-action: pan-y; background-color: #111827; user-select: none; }
+        /* Base Mobile Optimizations */
+        body { 
+            font-family: 'Inter', sans-serif; 
+            height: 100dvh; 
+            overscroll-behavior-y: contain; 
+            padding-top: env(safe-area-inset-top); 
+            padding-bottom: env(safe-area-inset-bottom); 
+            touch-action: pan-y; 
+            background-color: #111827; 
+            user-select: none; 
+        }
+        
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         
-        /* Updated: Robust Padding Hack to force perfect squares on iOS */
+        /* Aspect Ratio Hack for Grid Items */
         .grid-item-aspect { 
             position: relative; 
             width: 100%; 
             height: 0; 
-            padding-bottom: 100%; /* This mathematically forces a square ratio based on width */
+            padding-bottom: 100%; 
             overflow: hidden;
         }
         .grid-item-aspect > img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
         
+        /* Loading Spinner */
         .loader { border: 4px solid #f3f3f3; border-top: 4px solid #3b82f6; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         
+        /* UI Utilities */
         .nav-active { color: #60a5fa; border-top: 2px solid #60a5fa; }
         .safe-top-padding { padding-top: calc(env(safe-area-inset-top) + 1rem); }
         
-        /* Checkbox styling for gallery selection */
+        /* Selection UI */
         .select-ring { border: 3px solid transparent; transition: border-color 0.2s; }
         .selected-item .select-ring { border-color: #3b82f6; }
         .selected-item img { opacity: 0.7; }
@@ -57,17 +71,19 @@
         .series-active-item .select-ring { border-color: #22c55e; border-style: dashed; }
         .series-active-item::after { content: 'SERIES'; position: absolute; bottom: 0; left: 0; right: 0; background: #22c55e; color: #000; font-size: 8px; font-weight: 800; text-align: center; padding: 2px 0; }
 
-        /* Toggle Switch */
-        .toggle-checkbox:checked { right: 0; border-color: #3b82f6; }
-        .toggle-checkbox:checked + .toggle-label { background-color: #3b82f6; }
-        
+        /* Color Picker Radio */
+        .color-radio:checked + div { ring-width: 2px; ring-color: white; transform: scale(1.1); }
+
+        /* Leaflet Overrides */
         .leaflet-container { background: #1f2937; }
         .leaflet-popup-content-wrapper { background: #374151; color: white; border-radius: 0.5rem; }
         .leaflet-popup-tip { background: #374151; }
         .leaflet-popup-content { margin: 10px; font-size: 12px; }
-
-        /* Color Picker Radio */
-        .color-radio:checked + div { ring-width: 2px; ring-color: white; transform: scale(1.1); }
+        
+        /* Custom Toast/Confirm Styles */
+        .custom-modal-overlay { background: rgba(0,0,0,0.85); backdrop-filter: blur(4px); }
+        .animate-fade-in { animation: fadeIn 0.2s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
     </style>
 </head>
 <body class="bg-gray-900 text-white flex flex-col overflow-hidden">
@@ -97,20 +113,19 @@
         </div>
     </header>
 
-    <!-- MODULE 1: CAMERA (Redesigned for Native Only) -->
+    <!-- MODULE 1: CAMERA -->
     <section id="module-camera" class="flex-1 flex flex-col md:flex-row overflow-hidden relative">
-        <!-- Changed height from 45% to 30% to give more room to gallery -->
+        <!-- Native Camera UI -->
         <div id="camera-container" class="relative h-[30%] md:h-full md:flex-1 flex flex-col items-center justify-center bg-gray-800 border-b border-gray-700">
             
-            <!-- Native Mode Control Center -->
             <div id="native-mode-ui" class="absolute inset-0 flex flex-col items-center justify-center z-10 p-4">
                 
-                <!-- Compass Readout (Functional) -->
+                <!-- Compass -->
                 <div id="compass-display" class="absolute top-4 right-4 bg-black/30 px-3 py-1 rounded-full text-xs font-mono text-blue-300 border border-blue-500/20">
                     <span id="compass-text">--°</span>
                 </div>
 
-                <!-- Main Shutter Button -->
+                <!-- Shutter -->
                 <button id="snap" class="group flex flex-col items-center gap-3 active:scale-95 transition-transform">
                     <div class="w-16 h-16 bg-blue-600 rounded-full border-4 border-gray-700 shadow-xl flex items-center justify-center group-hover:bg-blue-500 ring-4 ring-blue-500/20">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -121,7 +136,7 @@
                     <span class="text-xs font-bold text-gray-300 uppercase tracking-wide">Add Photo</span>
                 </button>
 
-                <!-- Series Mode Toggle -->
+                <!-- Series Mode -->
                 <button id="series-mode-btn" class="absolute bottom-4 right-6 flex items-center gap-2 bg-gray-700/50 hover:bg-gray-600 border border-gray-600 px-3 py-1.5 rounded-full transition-colors text-xs text-gray-300">
                     <div class="w-2 h-2 rounded-full bg-gray-500" id="series-indicator"></div>
                     <span class="font-semibold">Series</span>
@@ -131,7 +146,7 @@
             <!-- Hidden Input for Native Capture -->
             <input type="file" id="native-cam-input" accept="image/*" capture="environment" class="hidden">
             
-            <!-- Video and Placeholder hidden but kept for logic -->
+            <!-- Placeholders for Web Mode logic -->
             <video id="video" class="hidden"></video>
             <div id="native-mode-placeholder" class="hidden"></div>
             <button id="torch-btn" class="hidden"></button>
@@ -139,13 +154,16 @@
             <div id="flash-element" class="flash-overlay"></div>
         </div>
 
+        <!-- Gallery -->
         <div id="gallery-panel" class="w-full h-[70%] md:h-full md:w-[400px] bg-gray-900 flex flex-col md:border-l shadow-2xl z-20">
+            <!-- Toolbar (Hidden unless select mode) -->
             <div id="selection-toolbar" class="bg-gray-800 p-3 hidden flex-shrink-0 border-b border-gray-700">
                  <div class="flex justify-between items-center">
                      <div class="flex items-center gap-2"><button id="cancel-select-mode" class="text-gray-400 hover:text-white"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></button><span id="selection-count" class="text-sm font-bold text-white">0 Selected</span></div>
                      <div class="flex gap-2"><button id="delete-selected-btn" class="bg-red-600/20 text-red-400 border border-red-600/50 text-xs font-bold py-2 px-3 rounded hover:bg-red-900/50">Delete</button><button id="download-selected-btn" class="bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold py-2 px-3 rounded">Download</button><button id="open-batch-modal-btn" class="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold py-2 px-3 rounded">Edit</button></div>
                  </div>
             </div>
+            
             <div id="gallery-header" class="p-3 flex justify-between items-center bg-gray-800 border-b border-gray-700 flex-shrink-0">
                 <div class="flex items-center gap-2"><span class="font-bold text-sm">Gallery</span><span id="gallery-count" class="text-xs bg-gray-700 px-2 py-0.5 rounded-full text-gray-300">0</span></div>
                 <div class="flex gap-2">
@@ -155,7 +173,7 @@
                 </div>
             </div>
             
-            <!-- UPDATED: Search Bar with Filter Button -->
+            <!-- Search & Filter -->
             <div id="gallery-search-bar" class="p-2 bg-gray-800 border-b border-gray-700 space-y-2">
                 <div class="flex gap-2">
                     <div class="relative flex-1">
@@ -170,7 +188,7 @@
                         </svg>
                     </button>
                 </div>
-                <!-- Date Range Panel (Hidden by default) -->
+                <!-- Date Filter Panel -->
                 <div id="filter-panel" class="hidden bg-gray-900 p-2 rounded border border-gray-700 grid grid-cols-2 gap-2">
                     <div>
                         <label class="block text-[10px] text-gray-400 mb-1">From</label>
@@ -183,7 +201,9 @@
                 </div>
             </div>
 
-            <div id="gallery" class="flex-1 p-3 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-3 gap-2 overflow-y-auto no-scrollbar content-start select-none"><div id="gallery-placeholder" class="col-span-full flex flex-col items-center justify-center text-gray-500 mt-10 space-y-2"><p class="text-xs">No photos taken yet</p></div></div>
+            <div id="gallery" class="flex-1 p-3 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-3 gap-2 overflow-y-auto no-scrollbar content-start select-none">
+                <div id="gallery-placeholder" class="col-span-full flex flex-col items-center justify-center text-gray-500 mt-10 space-y-2"><p class="text-xs">No photos taken yet</p></div>
+            </div>
         </div>
     </section>
 
@@ -206,16 +226,15 @@
         <div id="map-container" class="flex-1 w-full bg-gray-900 z-0"></div>
     </section>
 
-    <!-- Nav -->
+    <!-- Navigation -->
     <nav class="bg-gray-800 border-t border-gray-700 flex justify-around items-center h-16 shrink-0 z-40">
         <button id="nav-camera" class="flex flex-col items-center justify-center w-full h-full text-gray-400 hover:text-white nav-active"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg><span class="text-[10px] font-bold">Camera</span></button>
         <button id="nav-notes" class="flex flex-col items-center justify-center w-full h-full text-gray-400 hover:text-white"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg><span class="text-[10px] font-bold">Notes</span></button>
         <button id="nav-map" class="flex flex-col items-center justify-center w-full h-full text-gray-400 hover:text-white"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" /></svg><span class="text-[10px] font-bold">Map</span></button>
     </nav>
 
-    <!-- ADVANCED SETTINGS MODAL -->
+    <!-- SETTINGS MODAL -->
     <div id="project-modal" class="fixed inset-0 z-50 bg-black/95 hidden flex flex-col p-0 overflow-hidden">
-        <!-- Header -->
         <div class="bg-gray-800 p-4 border-b border-gray-700 flex justify-between items-center shrink-0 safe-top-padding">
             <h2 class="text-xl font-bold text-white">Settings</h2>
             <button id="close-settings-btn" class="text-gray-400 hover:text-white p-2">
@@ -223,39 +242,18 @@
             </button>
         </div>
         
-        <!-- Scrollable Settings -->
         <div class="flex-1 overflow-y-auto p-4 space-y-6">
             
-            <!-- Group 1: Project -->
+            <!-- Project Defaults -->
             <div class="bg-gray-800 rounded-lg p-4 space-y-3">
                 <h3 class="text-xs font-bold text-blue-400 uppercase tracking-wider mb-2">Project Defaults</h3>
-                
-                <div>
-                    <label class="block text-xs text-gray-400 mb-1">Project ID / NBI Number</label>
-                    <input type="text" id="set-proj-id" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-600 text-sm">
-                </div>
-                
-                <div>
-                    <label class="block text-xs text-gray-400 mb-1">Inspector / Author</label>
-                    <input type="text" id="set-author" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-600 text-sm" placeholder="e.g. Mario LoCoco, P.E.">
-                </div>
-
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                         <label class="block text-xs text-gray-400 mb-1">Next Photo #</label>
-                         <input type="number" id="set-next-num" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-600 text-sm">
-                    </div>
-                </div>
-
-                <div class="space-y-2 pt-2 border-t border-gray-700">
-                    <p class="text-xs text-gray-500">Default Captions for New Photos</p>
-                    <input type="text" id="set-def-c1" class="w-full bg-gray-900 text-white rounded p-2 border border-gray-600 text-xs" placeholder="Default Line 1">
-                    <input type="text" id="set-def-c2" class="w-full bg-gray-900 text-white rounded p-2 border border-gray-600 text-xs" placeholder="Default Line 2">
-                    <input type="text" id="set-def-c3" class="w-full bg-gray-900 text-white rounded p-2 border border-gray-600 text-xs" placeholder="Default Line 3">
-                </div>
+                <div><label class="block text-xs text-gray-400 mb-1">Project ID / NBI Number</label><input type="text" id="set-proj-id" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-600 text-sm"></div>
+                <div><label class="block text-xs text-gray-400 mb-1">Inspector / Author</label><input type="text" id="set-author" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-600 text-sm" placeholder="e.g. Mario LoCoco, P.E."></div>
+                <div class="grid grid-cols-2 gap-3"><div><label class="block text-xs text-gray-400 mb-1">Next Photo #</label><input type="number" id="set-next-num" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-600 text-sm"></div></div>
+                <div class="space-y-2 pt-2 border-t border-gray-700"><p class="text-xs text-gray-500">Default Captions for New Photos</p><input type="text" id="set-def-c1" class="w-full bg-gray-900 text-white rounded p-2 border border-gray-600 text-xs" placeholder="Default Line 1"><input type="text" id="set-def-c2" class="w-full bg-gray-900 text-white rounded p-2 border border-gray-600 text-xs" placeholder="Default Line 2"><input type="text" id="set-def-c3" class="w-full bg-gray-900 text-white rounded p-2 border border-gray-600 text-xs" placeholder="Default Line 3"></div>
             </div>
             
-            <!-- NEW: Report Branding -->
+            <!-- Report Branding -->
             <div class="bg-gray-800 rounded-lg p-4 space-y-3">
                 <h3 class="text-xs font-bold text-blue-400 uppercase tracking-wider mb-2">Report Branding</h3>
                 <div class="flex items-center gap-4">
@@ -271,157 +269,58 @@
                 </div>
             </div>
 
-            <!-- Group 2: Camera & Images -->
+            <!-- Camera & Image -->
             <div class="bg-gray-800 rounded-lg p-4 space-y-4">
                 <h3 class="text-xs font-bold text-blue-400 uppercase tracking-wider mb-2">Camera & Image</h3>
-                
-                <div class="flex items-center justify-between">
-                    <span class="text-sm">Use Native Camera App</span>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" id="set-native-cam" class="sr-only peer">
-                        <div class="w-11 h-6 bg-gray-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 peer-checked:bg-blue-600"></div>
-                    </label>
-                </div>
-
-                <div class="flex items-center justify-between">
-                    <span class="text-sm">Stream Resolution (Web Mode)</span>
-                    <select id="set-cam-res" class="bg-gray-900 text-white text-xs rounded p-2 border border-gray-600">
-                        <option value="max" selected>Max (4K if avail)</option>
-                        <option value="high">High (1080p)</option>
-                        <option value="med">Medium (720p)</option>
-                    </select>
-                </div>
-
-                <div class="flex items-center justify-between">
-                    <span class="text-sm">Burn Info on Photo</span>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" id="set-burn-in" class="sr-only peer" checked>
-                        <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                    </label>
-                </div>
-                
-                <div class="flex items-center justify-between">
-                    <span class="text-sm">Burn Text Size</span>
-                    <select id="set-font-scale" class="bg-gray-900 text-white text-xs rounded p-2 border border-gray-600">
-                        <option value="35">Small</option>
-                        <option value="25" selected>Medium</option>
-                        <option value="18">Large</option>
-                    </select>
-                </div>
-                
-                <div class="flex items-center justify-between">
-                    <span class="text-sm">Photo Quality (Compression)</span>
-                    <select id="set-jpeg-q" class="bg-gray-900 text-white text-xs rounded p-2 border border-gray-600">
-                        <option value="0.7">Low (Save Space)</option>
-                        <option value="0.9" selected>Balanced</option>
-                        <option value="0.98">Max Quality</option>
-                    </select>
-                </div>
-
-                <div class="flex items-center justify-between">
-                    <span class="text-sm">Show Compass (In Preview)</span>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" id="set-compass-ui" class="sr-only peer" checked>
-                        <div class="w-11 h-6 bg-gray-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 peer-checked:bg-blue-600"></div>
-                    </label>
-                </div>
-                
+                <div class="flex items-center justify-between"><span class="text-sm">Use Native Camera App</span><label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" id="set-native-cam" class="sr-only peer"><div class="w-11 h-6 bg-gray-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 peer-checked:bg-blue-600"></div></label></div>
+                <div class="flex items-center justify-between"><span class="text-sm">Stream Resolution (Web Mode)</span><select id="set-cam-res" class="bg-gray-900 text-white text-xs rounded p-2 border border-gray-600"><option value="max" selected>Max (4K if avail)</option><option value="high">High (1080p)</option><option value="med">Medium (720p)</option></select></div>
+                <div class="flex items-center justify-between"><span class="text-sm">Burn Info on Photo</span><label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" id="set-burn-in" class="sr-only peer" checked><div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div></label></div>
+                <div class="flex items-center justify-between"><span class="text-sm">Burn Text Size</span><select id="set-font-scale" class="bg-gray-900 text-white text-xs rounded p-2 border border-gray-600"><option value="35">Small</option><option value="25" selected>Medium</option><option value="18">Large</option></select></div>
+                <div class="flex items-center justify-between"><span class="text-sm">Photo Quality (Compression)</span><select id="set-jpeg-q" class="bg-gray-900 text-white text-xs rounded p-2 border border-gray-600"><option value="0.7">Low (Save Space)</option><option value="0.9" selected>Balanced</option><option value="0.98">Max Quality</option></select></div>
+                <div class="flex items-center justify-between"><span class="text-sm">Show Compass (In Preview)</span><label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" id="set-compass-ui" class="sr-only peer" checked><div class="w-11 h-6 bg-gray-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 peer-checked:bg-blue-600"></div></label></div>
                 <button id="enable-sensors-btn" class="w-full text-xs bg-gray-700 hover:bg-gray-600 py-2 rounded">Re-Request Compass Permission (iOS)</button>
             </div>
 
-            <!-- Group 3: Report & PDF -->
+            <!-- PDF Settings -->
             <div class="bg-gray-800 rounded-lg p-4 space-y-4">
                 <h3 class="text-xs font-bold text-blue-400 uppercase tracking-wider mb-2">PDF Report Settings</h3>
-                
-                <div class="flex items-center justify-between">
-                    <span class="text-sm">Report Title</span>
-                    <input type="text" id="set-report-title" class="w-32 bg-gray-900 text-white rounded p-1 border border-gray-600 text-xs text-right" value="Field Inspection Report">
-                </div>
-
-                <div class="flex items-center justify-between">
-                    <span class="text-sm">Photos Per Page</span>
-                    <select id="set-pdf-layout" class="bg-gray-900 text-white text-xs rounded p-2 border border-gray-600">
-                        <option value="1">1 Photo (Large)</option>
-                        <option value="2" selected>2 Photos (3x5)</option>
-                        <option value="4">4 Photos (Grid)</option>
-                    </select>
-                </div>
-
-                <div class="flex items-center justify-between">
-                    <span class="text-sm">PDF Resolution</span>
-                    <select id="set-pdf-res" class="bg-gray-900 text-white text-xs rounded p-2 border border-gray-600">
-                        <option value="800">Screen (Email)</option>
-                        <option value="2000" selected>Print (High Res)</option>
-                    </select>
-                </div>
-                
-                <div class="flex items-center justify-between">
-                    <span class="text-sm">Include Map Section</span>
-                    <input type="checkbox" id="set-inc-map" class="w-5 h-5 rounded bg-gray-900 border-gray-600" checked>
-                </div>
-                
-                <div class="flex items-center justify-between">
-                    <span class="text-sm">Include Field Notes</span>
-                    <input type="checkbox" id="set-inc-notes" class="w-5 h-5 rounded bg-gray-900 border-gray-600" checked>
-                </div>
+                <div class="flex items-center justify-between"><span class="text-sm">Report Title</span><input type="text" id="set-report-title" class="w-32 bg-gray-900 text-white rounded p-1 border border-gray-600 text-xs text-right" value="Field Inspection Report"></div>
+                <div class="flex items-center justify-between"><span class="text-sm">Photos Per Page</span><select id="set-pdf-layout" class="bg-gray-900 text-white text-xs rounded p-2 border border-gray-600"><option value="1">1 Photo (Large)</option><option value="2" selected>2 Photos (3x5)</option><option value="4">4 Photos (Grid)</option></select></div>
+                <div class="flex items-center justify-between"><span class="text-sm">PDF Resolution</span><select id="set-pdf-res" class="bg-gray-900 text-white text-xs rounded p-2 border border-gray-600"><option value="800">Screen (Email)</option><option value="2000" selected>Print (High Res)</option></select></div>
+                <div class="flex items-center justify-between"><span class="text-sm">Include Map Section</span><input type="checkbox" id="set-inc-map" class="w-5 h-5 rounded bg-gray-900 border-gray-600" checked></div>
+                <div class="flex items-center justify-between"><span class="text-sm">Include Field Notes</span><input type="checkbox" id="set-inc-notes" class="w-5 h-5 rounded bg-gray-900 border-gray-600" checked></div>
             </div>
 
-            <!-- Group 4: App Preferences -->
+            <!-- App Preferences -->
             <div class="bg-gray-800 rounded-lg p-4 space-y-4">
                 <h3 class="text-xs font-bold text-blue-400 uppercase tracking-wider mb-2">App Preferences</h3>
-                
-                <div class="flex items-center justify-between">
-                    <span class="text-sm">Temperature Unit</span>
-                    <div class="flex bg-gray-900 rounded p-1">
-                        <button id="set-unit-c" class="px-3 py-1 rounded text-xs">°C</button>
-                        <button id="set-unit-f" class="px-3 py-1 rounded text-xs bg-blue-600 text-white">°F</button>
-                    </div>
-                </div>
-
-                <div class="flex items-center justify-between">
-                    <span class="text-sm">GPS Format</span>
-                    <select id="set-gps-fmt" class="bg-gray-900 text-white text-xs rounded p-2 border border-gray-600">
-                        <option value="dec" selected>Decimal (40.7128)</option>
-                        <option value="dms">DMS (40° 42' N)</option>
-                    </select>
-                </div>
-                
-                <div class="flex items-center justify-between">
-                    <span class="text-sm">Haptic Feedback</span>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" id="set-haptic" class="sr-only peer" checked>
-                        <div class="w-11 h-6 bg-gray-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 peer-checked:bg-blue-600"></div>
-                    </label>
-                </div>
+                <div class="flex items-center justify-between"><span class="text-sm">Temperature Unit</span><div class="flex bg-gray-900 rounded p-1"><button id="set-unit-c" class="px-3 py-1 rounded text-xs">°C</button><button id="set-unit-f" class="px-3 py-1 rounded text-xs bg-blue-600 text-white">°F</button></div></div>
+                <div class="flex items-center justify-between"><span class="text-sm">GPS Format</span><select id="set-gps-fmt" class="bg-gray-900 text-white text-xs rounded p-2 border border-gray-600"><option value="dec" selected>Decimal (40.7128)</option><option value="dms">DMS (40° 42' N)</option></select></div>
+                <div class="flex items-center justify-between"><span class="text-sm">Haptic Feedback</span><label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" id="set-haptic" class="sr-only peer" checked><div class="w-11 h-6 bg-gray-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 peer-checked:bg-blue-600"></div></label></div>
             </div>
 
             <!-- Data Management -->
             <div class="bg-gray-800 rounded-lg p-4">
                 <h3 class="text-xs font-bold text-blue-400 uppercase tracking-wider mb-2">Data Management</h3>
-                
-                <!-- NEW Download Project Button -->
                 <button id="download-project-btn" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded mb-3 shadow-lg flex items-center justify-center gap-2">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                     Download Project (ZIP)
                 </button>
-
                 <div class="flex gap-2">
                     <button id="backup-btn" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-3 rounded">Save to Device</button>
                     <button id="email-backup-btn" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-3 rounded">Email Backup</button>
                     <button id="restore-btn" class="flex-1 bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold py-3 rounded">Restore</button>
                     <input type="file" id="restore-input" class="hidden" accept=".json">
+                    <button id="new-visit-btn" class="flex-1 bg-red-900 hover:bg-red-800 text-white text-xs font-bold py-3 rounded">Reset</button>
                 </div>
             </div>
-
         </div>
-
-        <!-- Footer -->
         <div class="p-4 bg-gray-800 border-t border-gray-700 shrink-0">
             <button id="save-settings-btn" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded text-sm shadow-lg">Save & Close</button>
         </div>
     </div>
 
-    <!-- Modals (Batch & Preview) -->
+    <!-- Batch Edit Modal -->
     <div id="batch-modal" class="fixed inset-0 z-50 bg-black/95 hidden flex flex-col justify-end md:justify-center p-4">
         <div class="bg-gray-800 rounded-t-xl md:rounded-xl w-full max-w-md p-6 space-y-4 shadow-2xl border border-gray-700 mx-auto">
             <div class="flex justify-between items-center mb-2"><h3 class="text-lg font-bold text-white">Batch Edit</h3><span class="text-xs text-gray-400 bg-gray-700 px-2 py-1 rounded" id="batch-count-label">0 Selected</span></div>
@@ -436,8 +335,8 @@
         </div>
     </div>
     
+    <!-- Photo Preview Modal -->
     <div id="preview-modal" class="fixed inset-0 z-50 bg-black/95 hidden flex flex-col">
-        <!-- New Header Layout: Close Left, Delete Right -->
         <div class="flex justify-between items-center p-4 bg-gray-900 border-b border-gray-800 shrink-0 safe-top-padding">
             <div class="flex items-center gap-3">
                 <button id="close-preview-btn" class="text-gray-400 p-2 hover:text-white transition-colors">
@@ -460,7 +359,6 @@
                 <div class="space-y-2"><label class="block text-xs uppercase text-gray-500 font-bold">Burn-in Captions</label><input type="text" id="modal-caption-1" class="w-full bg-gray-800 text-white rounded p-3 border border-gray-700 text-sm"><input type="text" id="modal-caption-2" class="w-full bg-gray-800 text-white rounded p-3 border border-gray-700 text-sm"><input type="text" id="modal-caption-3" class="w-full bg-gray-800 text-white rounded p-3 border border-gray-700 text-sm"></div>
                 <div><label class="block text-xs uppercase text-gray-500 font-bold mb-1 flex justify-between"><span>Notes</span><button id="single-mic-btn" class="text-blue-400">Mic</button></label><textarea id="modal-metadata" class="w-full bg-gray-800 text-white rounded p-3 border border-gray-700 text-sm h-20"></textarea></div>
                 
-                <!-- New Footer Layout: Download Left, Save Right -->
                 <div class="grid grid-cols-2 gap-3 pt-4 border-t border-gray-800 mb-8">
                     <button id="preview-download-btn" class="bg-gray-800 text-white font-semibold py-3 rounded border border-gray-700 hover:bg-gray-700">Download</button>
                     <button id="save-photo-btn" class="bg-blue-600 text-white font-bold py-3 rounded hover:bg-blue-500 shadow-lg">Save</button>
@@ -469,7 +367,7 @@
         </div>
     </div>
 
-    <!-- NEW: Annotation Modal -->
+    <!-- Annotation Modal -->
     <div id="annotation-modal" class="fixed inset-0 z-[60] bg-black hidden flex-col">
         <div class="bg-gray-900 p-2 flex justify-between items-center border-b border-gray-800 shrink-0 safe-top-padding">
             <button id="cancel-annotation-btn" class="text-gray-400 px-3 py-2 text-sm font-bold">Cancel</button>
@@ -488,16 +386,43 @@
         </div>
     </div>
     
+    <!-- Custom Dialog Overlay (Replaces Alert/Confirm) -->
+    <div id="custom-alert-overlay" class="fixed inset-0 z-[100] custom-modal-overlay hidden flex items-center justify-center p-4 animate-fade-in">
+        <div class="bg-gray-800 rounded-lg shadow-2xl max-w-sm w-full border border-gray-700 transform transition-all">
+            <div class="p-5">
+                <h3 class="text-lg font-medium text-white mb-2" id="alert-title">Notice</h3>
+                <p class="text-gray-300 text-sm" id="alert-message">Message goes here.</p>
+            </div>
+            <div class="p-4 border-t border-gray-700 flex justify-end gap-2">
+                <button id="alert-cancel-btn" class="hidden px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded transition-colors">Cancel</button>
+                <button id="alert-ok-btn" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded shadow transition-colors">OK</button>
+            </div>
+        </div>
+    </div>
+    
     <div id="processing-overlay" class="absolute inset-0 z-50 bg-black/80 flex flex-col items-center justify-center hidden backdrop-blur-sm"><div class="loader mb-4"></div><p id="processing-text" class="text-white font-semibold">Processing...</p></div>
 
     <script>
         // --- Globals & State ---
+        // Manifest Injection for PWA installation
         const manifest = { "name": "Field Cam Pro", "short_name": "Field Cam", "start_url": ".", "display": "standalone", "background_color": "#111827", "theme_color": "#1f2937", "icons": [{ "src": "https://cdn-icons-png.flaticon.com/512/1042/1042339.png", "sizes": "512x512", "type": "image/png" }] };
         document.querySelector('#my-manifest').setAttribute('href', URL.createObjectURL(new Blob([JSON.stringify(manifest)], {type: 'application/json'})));
 
+        // IndexedDB Helper Wrapper
         const DB = {
             name: 'FieldCamDB', version: 3, 
-            open: function() { return new Promise((res, rej) => { const req = indexedDB.open(this.name, this.version); req.onupgradeneeded = (e) => { const db = e.target.result; if (!db.objectStoreNames.contains('photos')) db.createObjectStore('photos', { keyPath: 'id' }); if (!db.objectStoreNames.contains('notes')) db.createObjectStore('notes', { keyPath: 'id' }); }; req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error); }); },
+            open: function() { 
+                return new Promise((res, rej) => { 
+                    const req = indexedDB.open(this.name, this.version); 
+                    req.onupgradeneeded = (e) => { 
+                        const db = e.target.result; 
+                        if (!db.objectStoreNames.contains('photos')) db.createObjectStore('photos', { keyPath: 'id' }); 
+                        if (!db.objectStoreNames.contains('notes')) db.createObjectStore('notes', { keyPath: 'id' }); 
+                    }; 
+                    req.onsuccess = () => res(req.result); 
+                    req.onerror = () => rej(req.error); 
+                }); 
+            },
             add: async function(s, o) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readwrite'); tx.objectStore(s).put(o); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); },
             getAll: async function(s) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readonly'); const req = tx.objectStore(s).getAll(); req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error); }); },
             delete: async function(s, id) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readwrite'); tx.objectStore(s).delete(id); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); },
@@ -508,24 +433,14 @@
         const state = { 
             photos: [], notes: [], selectedIds: new Set(), isSelectMode: false, currentLocation: "Locating...", currentLat:0, currentLon:0, 
             videoStream: null, imageCapture: null, nativeResSupported: false, editingId: null, editingNoteId: null, isProcessing: false, 
-            heading: null, track: null, torchOn: false, weather: "", longPressTimer: null, longPressTriggered: false,
-            mapInstance: null, mapMarkersGroup: null,
+            heading: null, track: null, torchOn: false, weather: "", 
             
             // Series Mode State
-            seriesMode: false,
-            currentSeriesIds: new Set(), // IDs of photos in current series
-
+            seriesMode: false, currentSeriesIds: new Set(), seriesCaptions: null,
             // Search State
-            searchQuery: "",
-            filterStart: null,
-            filterEnd: null,
-
+            searchQuery: "", filterStart: null, filterEnd: null,
             // Annotation State
-            isDrawing: false,
-            lastX: 0, 
-            lastY: 0,
-            ctx: null,
-            annotationHistory: [],
+            isDrawing: false, lastX: 0, lastY: 0, ctx: null, annotationHistory: [],
 
             // SETTINGS STATE
             settings: {
@@ -535,7 +450,7 @@
                 defC2: localStorage.getItem('fc_c2') || "",
                 defC3: localStorage.getItem('fc_c3') || "",
                 nextNum: parseInt(localStorage.getItem('fc_num') || "1"),
-                burnIn: localStorage.getItem('fc_burn') !== "false", // Default true
+                burnIn: localStorage.getItem('fc_burn') !== "false",
                 fontScale: parseInt(localStorage.getItem('fc_font') || "25"),
                 jpegQ: parseFloat(localStorage.getItem('fc_jq') || "0.9"),
                 compassUi: localStorage.getItem('fc_comp') !== "false",
@@ -549,24 +464,26 @@
                 haptic: localStorage.getItem('fc_hap') !== "false",
                 camRes: localStorage.getItem('fc_camRes') || "max",
                 nativeCam: true, // Default TRUE for Native Mode
-                logo: localStorage.getItem('fc_logo') || null // NEW: Persisted Logo
+                logo: localStorage.getItem('fc_logo') || null
             }
         };
 
+        // Cache UI elements
         const ui = {
             modCamera: document.getElementById('module-camera'), modNotes: document.getElementById('module-notes'), modMap: document.getElementById('module-map'),
             navCamera: document.getElementById('nav-camera'), navNotes: document.getElementById('nav-notes'), navMap: document.getElementById('nav-map'),
             video: document.getElementById('video'), canvas: document.getElementById('canvas'), snapBtn: document.getElementById('snap'),
             gallery: document.getElementById('gallery'), galleryCount: document.getElementById('gallery-count'), locationText: document.getElementById('location-text'),
             gpsStatus: document.getElementById('gps-status-label'), weatherStatus: document.getElementById('weather-status'), compassOverlay: document.getElementById('compass-display'), compassText: document.getElementById('compass-text'),
+            
             // Settings Elements
             projectModal: document.getElementById('project-modal'), projectBtn: document.getElementById('project-settings-btn'), closeSettingsBtn: document.getElementById('close-settings-btn'),
             saveProjectBtn: document.getElementById('save-settings-btn'), enableCompassBtn: document.getElementById('enable-sensors-btn'),
             backupBtn: document.getElementById('backup-btn'), restoreBtn: document.getElementById('restore-btn'), restoreInput: document.getElementById('restore-input'),
-            downloadProjectBtn: document.getElementById('download-project-btn'), 
-            emailBackupBtn: document.getElementById('email-backup-btn'),
+            downloadProjectBtn: document.getElementById('download-project-btn'), emailBackupBtn: document.getElementById('email-backup-btn'),
             projectIdDisplay: document.getElementById('project-id-display'),
-            // Inputs
+            
+            // Settings Inputs
             sPid: document.getElementById('set-proj-id'), sAuth: document.getElementById('set-author'), sNum: document.getElementById('set-next-num'),
             sC1: document.getElementById('set-def-c1'), sC2: document.getElementById('set-def-c2'), sC3: document.getElementById('set-def-c3'),
             sBurn: document.getElementById('set-burn-in'), sFont: document.getElementById('set-font-scale'), sJpeg: document.getElementById('set-jpeg-q'),
@@ -576,61 +493,118 @@
             sUnitC: document.getElementById('set-unit-c'), sUnitF: document.getElementById('set-unit-f'), sGps: document.getElementById('set-gps-fmt'), sHap: document.getElementById('set-haptic'),
             
             // Branding Inputs
-            logoInput: document.getElementById('set-logo-input'),
-            logoPreview: document.getElementById('set-logo-preview'),
-            logoPlaceholder: document.getElementById('set-logo-placeholder'),
-            clearLogoBtn: document.getElementById('clear-logo-btn'),
+            logoInput: document.getElementById('set-logo-input'), logoPreview: document.getElementById('set-logo-preview'), logoPlaceholder: document.getElementById('set-logo-placeholder'), clearLogoBtn: document.getElementById('clear-logo-btn'),
 
+            // Overlays & Previews
             processing: document.getElementById('processing-overlay'), processingText: document.getElementById('processing-text'),
-            errorDisplay: document.getElementById('error-display'), errorMsg: document.getElementById('error-msg'), flash: document.getElementById('flash-element'),
+            flash: document.getElementById('flash-element'),
             previewModal: document.getElementById('preview-modal'), previewImg: document.getElementById('preview-img'),
             inputs: { c1: document.getElementById('modal-caption-1'), c2: document.getElementById('modal-caption-2'), c3: document.getElementById('modal-caption-3'), meta: document.getElementById('modal-metadata') },
             saveBtn: document.getElementById('save-photo-btn'), closeBtn: document.getElementById('close-preview-btn'), downloadSingleBtn: document.getElementById('preview-download-btn'),
-            deleteSingleBtn: document.getElementById('preview-delete-btn'), galleryHeader: document.getElementById('gallery-header'), 
-            selectionToolbar: document.getElementById('selection-toolbar'), selectionCount: document.getElementById('selection-count'), cancelSelectBtn: document.getElementById('cancel-select-mode'),
+            deleteSingleBtn: document.getElementById('preview-delete-btn'), 
+            
+            // Gallery Controls
+            galleryHeader: document.getElementById('gallery-header'), selectionToolbar: document.getElementById('selection-toolbar'), selectionCount: document.getElementById('selection-count'), cancelSelectBtn: document.getElementById('cancel-select-mode'),
             toggleSelect: document.getElementById('toggle-select-mode'), downloadAll: document.getElementById('download-all-btn'), downloadSelected: document.getElementById('download-selected-btn'), deleteSelected: document.getElementById('delete-selected-btn'), openBatchBtn: document.getElementById('open-batch-modal-btn'),
+            
+            // Batch Modal
             batchModal: document.getElementById('batch-modal'), batchCountLabel: document.getElementById('batch-count-label'), cancelBatchBtn: document.getElementById('cancel-batch-btn'), applyBatchBtn: document.getElementById('apply-batch-btn'),
             groupInputs: [document.getElementById('group-caption-1'), document.getElementById('group-caption-2'), document.getElementById('group-caption-3'), document.getElementById('group-notes')],
-            torchBtn: document.getElementById('torch-btn'), micBtns: { single: document.getElementById('single-mic-btn'), group: document.getElementById('group-mic-btn'), note: document.getElementById('note-mic-btn') },
-            cameraContainer: document.getElementById('camera-container'), notesList: document.getElementById('notes-list'), newNoteInput: document.getElementById('new-note-input'), 
+            
+            // Mics
+            micBtns: { single: document.getElementById('single-mic-btn'), group: document.getElementById('group-mic-btn'), note: document.getElementById('note-mic-btn') },
+            
+            // Notes
+            notesList: document.getElementById('notes-list'), newNoteInput: document.getElementById('new-note-input'), 
             addNoteBtn: document.getElementById('add-note-btn'), cancelNoteEditBtn: document.getElementById('cancel-note-edit-btn'), exportNotesBtn: document.getElementById('export-notes-btn'), newVisitBtn: document.getElementById('new-visit-btn'),
+            
+            // Map
             mapContainer: document.getElementById('map-container'), mapPhotoCount: document.getElementById('map-photo-count'),
             exportPdfBtn: document.getElementById('export-pdf-btn'), exportPdfGalleryBtn: document.getElementById('export-pdf-gallery-btn'),
+            
+            // Camera Specific
             nativeInput: document.getElementById('native-cam-input'), nativePlaceholder: document.getElementById('native-mode-placeholder'),
-            seriesBtn: document.getElementById('series-mode-btn'),
-            compassDisplay: document.getElementById('compass-display'),
-            seriesIndicator: document.getElementById('series-indicator'),
+            seriesBtn: document.getElementById('series-mode-btn'), compassDisplay: document.getElementById('compass-display'), seriesIndicator: document.getElementById('series-indicator'),
             quickShareBtn: document.getElementById('quick-share-btn'),
             
             // Search UI
-            searchInput: document.getElementById('gallery-search-input'),
-            filterBtn: document.getElementById('toggle-filter-btn'),
-            filterPanel: document.getElementById('filter-panel'),
-            dateStart: document.getElementById('filter-date-start'),
-            dateEnd: document.getElementById('filter-date-end'),
+            searchInput: document.getElementById('gallery-search-input'), filterBtn: document.getElementById('toggle-filter-btn'), filterPanel: document.getElementById('filter-panel'), dateStart: document.getElementById('filter-date-start'), dateEnd: document.getElementById('filter-date-end'),
 
             // Annotation UI
-            annotateBtn: document.getElementById('annotate-btn'),
-            annotationModal: document.getElementById('annotation-modal'),
-            annotationCanvas: document.getElementById('annotation-canvas'),
-            cancelAnnotationBtn: document.getElementById('cancel-annotation-btn'),
-            saveAnnotationBtn: document.getElementById('save-annotation-btn'),
-            undoAnnotationBtn: document.getElementById('undo-annotation-btn'),
-            colorRadios: document.querySelectorAll('input[name="pen-color"]')
+            annotateBtn: document.getElementById('annotate-btn'), annotationModal: document.getElementById('annotation-modal'), annotationCanvas: document.getElementById('annotation-canvas'),
+            cancelAnnotationBtn: document.getElementById('cancel-annotation-btn'), saveAnnotationBtn: document.getElementById('save-annotation-btn'), undoAnnotationBtn: document.getElementById('undo-annotation-btn'),
+            colorRadios: document.querySelectorAll('input[name="pen-color"]'),
+            
+            // Alerts
+            alertOverlay: document.getElementById('custom-alert-overlay'),
+            alertTitle: document.getElementById('alert-title'),
+            alertMessage: document.getElementById('alert-message'),
+            alertOkBtn: document.getElementById('alert-ok-btn'),
+            alertCancelBtn: document.getElementById('alert-cancel-btn')
         };
 
         // --- Helpers ---
         function setProcessing(active, msg="Processing...") { state.isProcessing = active; ui.processingText.textContent = msg; ui.processing.classList.toggle('hidden', !active); document.getElementById('snap').disabled = active; }
-        function triggerFlash() { ui.flash.classList.remove('animate-flash'); void ui.flash.offsetWidth; ui.flash.classList.add('animate-flash'); }
+        
+        // --- CUSTOM ALERT / CONFIRM SYSTEM (Replacement for Window.alert) ---
+        function showAlert(message, title="Notice") {
+            return new Promise(resolve => {
+                ui.alertTitle.textContent = title;
+                ui.alertMessage.textContent = message;
+                ui.alertCancelBtn.classList.add('hidden');
+                ui.alertOverlay.classList.remove('hidden');
+                
+                const clickHandler = () => {
+                    ui.alertOverlay.classList.add('hidden');
+                    ui.alertOkBtn.removeEventListener('click', clickHandler);
+                    resolve();
+                };
+                ui.alertOkBtn.addEventListener('click', clickHandler);
+            });
+        }
+        
+        function showConfirm(message, title="Confirm Action") {
+            return new Promise(resolve => {
+                ui.alertTitle.textContent = title;
+                ui.alertMessage.textContent = message;
+                ui.alertCancelBtn.classList.remove('hidden');
+                ui.alertOverlay.classList.remove('hidden');
+                
+                const okHandler = () => {
+                    ui.alertOverlay.classList.add('hidden');
+                    cleanup();
+                    resolve(true);
+                };
+                
+                const cancelHandler = () => {
+                    ui.alertOverlay.classList.add('hidden');
+                    cleanup();
+                    resolve(false);
+                };
+                
+                function cleanup() {
+                    ui.alertOkBtn.removeEventListener('click', okHandler);
+                    ui.alertCancelBtn.removeEventListener('click', cancelHandler);
+                }
+                
+                ui.alertOkBtn.addEventListener('click', okHandler);
+                ui.alertCancelBtn.addEventListener('click', cancelHandler);
+            });
+        }
+
         async function prepPhotoForSave(p) { const b = await blobToBuffer(p.finalBlob); const s = {...p}; delete s.originalBlob; delete s.displayUrl; delete s.finalBlob; s.finalBuffer = b; return s; }
+        
         function createImageFromBlob(b) { return new Promise(r => { const u = URL.createObjectURL(b); const i = new Image(); i.onload = () => { URL.revokeObjectURL(u); r(i); }; i.src = u; }); }
+        
         function formatGPS(lat, lon) {
             if (!lat || !lon) return "No GPS";
             if (state.settings.gpsFmt === 'dec') return `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
             const toDMS = (deg) => { const d = Math.floor(Math.abs(deg)); const m = Math.floor((Math.abs(deg) - d) * 60); const s = ((Math.abs(deg) - d - m/60) * 3600).toFixed(1); return `${d}°${m}'${s}"`; };
             return `${toDMS(lat)}${lat>=0?'N':'S'} ${toDMS(lon)}${lon>=0?'E':'W'}`;
         }
+        
         function getAspectFit(imgW, imgH, maxW, maxH) { const ratio = Math.min(maxW / imgW, maxH / imgH); return { w: imgW * ratio, h: imgH * ratio }; }
+        
         function blobToBuffer(blob) {
             if (!blob) return Promise.resolve(null);
             if (typeof blob.arrayBuffer === 'function') return blob.arrayBuffer();
@@ -641,7 +615,9 @@
                 fr.readAsArrayBuffer(blob);
             });
         }
+        
         function updateProjectDisplay() { ui.projectIdDisplay.textContent = state.settings.projectId || "Settings"; }
+        
         function updateUnitUI() { 
             const isF = state.settings.tempUnit === 'F';
             ui.sUnitF.className = `px-3 py-1 rounded text-xs ${isF ? 'bg-blue-600 text-white' : ''}`;
@@ -668,13 +644,11 @@
 
         async function fetchWeather(lat, lon) {
             try {
-                // Using Open-Meteo (Free, No Key)
                 const unit = state.settings.tempUnit === 'F' ? 'fahrenheit' : 'celsius';
                 const resp = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code&temperature_unit=${unit}`);
                 if (!resp.ok) throw new Error("Weather API fail");
                 const data = await resp.json();
                 const temp = Math.round(data.current.temperature_2m);
-                // Simple WMO code map
                 const codes = {0:"Clear",1:"Fair",2:"Cloudy",3:"Overcast",45:"Fog",51:"Drizzle",61:"Rain",71:"Snow",95:"Storm"};
                 const desc = codes[data.current.weather_code] || "";
                 state.weather = `${temp}°${state.settings.tempUnit} ${desc}`;
@@ -710,21 +684,16 @@
         async function initCamera() {
             // Simplified for Native Mode Only
             if (!window.isSecureContext) console.warn("HTTPS likely required for Camera.");
-            // No getUserMedia needed
             ui.video.classList.add('hidden');
             ui.nativePlaceholder.classList.remove('hidden');
-            if(ui.torchBtn) ui.torchBtn.classList.add('hidden');
         }
 
         function initProjectSettings() {
             updateProjectDisplay();
             updateUnitUI();
-            if (ui.compassOverlay) {
-                ui.compassOverlay.classList.toggle('hidden', !state.settings.compassUi);
-            }
+            if (ui.compassOverlay) ui.compassOverlay.classList.toggle('hidden', !state.settings.compassUi);
             if(ui.enableCompassBtn) ui.enableCompassBtn.onclick = enableCompass;
 
-            // NEW: Initialize Logo Preview
             if (state.settings.logo) {
                 ui.logoPreview.src = state.settings.logo;
                 ui.logoPreview.classList.remove('hidden');
@@ -734,7 +703,6 @@
         }
 
         function setupDictation() {
-            // Check support
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             if (!SpeechRecognition) {
                 Object.values(ui.micBtns).forEach(b => { if(b) b.style.display = 'none'; });
@@ -747,7 +715,7 @@
                     const recognition = new SpeechRecognition();
                     recognition.lang = 'en-US';
                     recognition.start();
-                    btn.classList.add('text-red-500'); // Visual feedback
+                    btn.classList.add('text-red-500'); 
                     
                     recognition.onresult = (event) => {
                         const transcript = event.results[0][0].transcript;
@@ -766,23 +734,15 @@
         }
 
         function switchModule(modName) {
-            // Update Tab styles
             [ui.navCamera, ui.navNotes, ui.navMap].forEach(el => el.classList.remove('nav-active'));
             ui[`nav${modName.charAt(0).toUpperCase() + modName.slice(1)}`].classList.add('nav-active');
             
-            // Hide all modules
             [ui.modCamera, ui.modNotes, ui.modMap].forEach(el => el.classList.add('hidden'));
-            
-            // Show target
             ui[`mod${modName.charAt(0).toUpperCase() + modName.slice(1)}`].classList.remove('hidden');
 
-            // Specific logic
             if (modName === 'map') {
                 renderMapMarkers();
-                // Fix for Leaflet rendering in hidden div
-                setTimeout(() => {
-                    if (state.mapInstance) state.mapInstance.invalidateSize();
-                }, 100);
+                setTimeout(() => { if (state.mapInstance) state.mapInstance.invalidateSize(); }, 100);
             }
         }
 
@@ -803,11 +763,8 @@
                 marker.addTo(state.mapMarkersGroup);
             });
 
-            if (validPhotos.length > 0) {
-                state.mapInstance.fitBounds(state.mapMarkersGroup.getBounds().pad(0.1));
-            } else if (state.currentLat) {
-                state.mapInstance.setView([state.currentLat, state.currentLon], 15);
-            }
+            if (validPhotos.length > 0) state.mapInstance.fitBounds(state.mapMarkersGroup.getBounds().pad(0.1));
+            else if (state.currentLat) state.mapInstance.setView([state.currentLat, state.currentLon], 15);
         }
 
         // ==========================================
@@ -816,10 +773,9 @@
 
         function renderGallery() {
             ui.gallery.innerHTML = '';
-            
             let displayPhotos = state.photos;
             
-            // Apply Search Filter (Text)
+            // Search Text
             if (state.searchQuery) {
                 const q = state.searchQuery;
                 displayPhotos = displayPhotos.filter(p => {
@@ -832,30 +788,22 @@
                 });
             }
 
-            // Apply Date Range Filter (Using ID/Timestamp)
+            // Date Range
             if (state.filterStart) {
-                // Parse start date "YYYY-MM-DD" to epoch at 00:00:00
-                // Note: Input date is local, so we construct local date
                 const [y, m, d] = state.filterStart.split('-').map(Number);
                 const startDate = new Date(y, m - 1, d, 0, 0, 0).getTime();
                 displayPhotos = displayPhotos.filter(p => p.id >= startDate);
             }
-            
             if (state.filterEnd) {
-                // Parse end date "YYYY-MM-DD" to epoch at 23:59:59
                 const [y, m, d] = state.filterEnd.split('-').map(Number);
                 const endDate = new Date(y, m - 1, d, 23, 59, 59).getTime();
                 displayPhotos = displayPhotos.filter(p => p.id <= endDate);
             }
             
-            // Update Count Text
-            if (state.searchQuery || state.filterStart || state.filterEnd) {
-                ui.galleryCount.innerText = `Found: ${displayPhotos.length}`;
-            } else {
-                ui.galleryCount.innerText = state.photos.length;
-            }
+            // UI Update
+            if (state.searchQuery || state.filterStart || state.filterEnd) ui.galleryCount.innerText = `Found: ${displayPhotos.length}`;
+            else ui.galleryCount.innerText = state.photos.length;
             
-            // Toggle toolbar visibility
             ui.galleryHeader.classList.toggle('hidden', state.isSelectMode);
             ui.selectionToolbar.classList.toggle('hidden', !state.isSelectMode);
             ui.selectionCount.innerText = `${state.selectedIds.size} Selected`;
@@ -865,10 +813,8 @@
                 return;
             }
 
-            // Sort Descending (Newest first)
             displayPhotos.sort((a,b) => b.id - a.id).forEach(p => {
                 const el = document.createElement('div');
-                // Check if item is part of active series
                 const isSeries = state.seriesMode && state.currentSeriesIds.has(p.id);
                 const isSelected = state.isSelectMode && state.selectedIds.has(p.id);
                 
@@ -905,12 +851,10 @@
                     renderGallery();
                     if(navigator.vibrate) navigator.vibrate(50);
                 }
-            }, 600); // 600ms hold
+            }, 600); 
         }
 
-        function cancelLongPress() {
-            clearTimeout(state.longPressTimer);
-        }
+        function cancelLongPress() { clearTimeout(state.longPressTimer); }
 
         function toggleSelectMode() {
             state.isSelectMode = !state.isSelectMode;
@@ -950,7 +894,7 @@
         }
 
         async function deleteNote(id) {
-            if(!confirm("Delete this note?")) return;
+            if(!await showConfirm("Delete this note?")) return;
             await DB.delete('notes', id);
             state.notes = state.notes.filter(n => n.id !== id);
             renderNotes();
@@ -979,7 +923,7 @@
         }
 
         function exportNotes() {
-            if (state.notes.length === 0) return alert("No notes to export.");
+            if (state.notes.length === 0) return showAlert("No notes to export.");
             const csvContent = "data:text/csv;charset=utf-8," 
                 + "ID,Timestamp,Location,Text\n"
                 + state.notes.map(n => `${n.id},"${n.timestamp}","${n.location}","${n.text.replace(/"/g, '""')}"`).join("\n");
@@ -993,7 +937,6 @@
             document.body.removeChild(link);
         }
 
-        // --- Interaction Logic ---
         function openEditor(id) {
             const p = state.photos.find(x => x.id === id);
             if (!p) return;
@@ -1016,7 +959,6 @@
             ui.sBurn.checked = state.settings.burnIn;
             ui.sFont.value = state.settings.fontScale;
             ui.sJpeg.value = state.settings.jpegQ;
-            // Native UI Specifics removed from load
             ui.sComp.checked = state.settings.compassUi;
             ui.sRTitle.value = state.settings.reportTitle;
             ui.sPlay.value = state.settings.pdfLayout;
@@ -1037,7 +979,6 @@
             state.settings.burnIn = ui.sBurn.checked;
             state.settings.fontScale = parseInt(ui.sFont.value);
             state.settings.jpegQ = parseFloat(ui.sJpeg.value);
-            // Native UI Specifics removed from save
             state.settings.compassUi = ui.sComp.checked;
             state.settings.reportTitle = ui.sRTitle.value;
             state.settings.pdfLayout = parseInt(ui.sPlay.value);
@@ -1047,7 +988,6 @@
             state.settings.gpsFmt = ui.sGps.value;
             state.settings.haptic = ui.sHap.checked;
 
-            // Save to LocalStorage
             localStorage.setItem('fc_pid', state.settings.projectId);
             localStorage.setItem('fc_auth', state.settings.author);
             localStorage.setItem('fc_num', state.settings.nextNum);
@@ -1065,15 +1005,13 @@
             localStorage.setItem('fc_inotes', state.settings.incNotes);
             localStorage.setItem('fc_gps', state.settings.gpsFmt);
             localStorage.setItem('fc_hap', state.settings.haptic);
-            
-            // Logo is saved directly in its handler
 
             ui.projectModal.classList.add('hidden');
-            initProjectSettings(); // Update visual state
+            initProjectSettings(); 
         }
 
         // ==========================================
-        //  MOVED UP FOR SCOPE SAFETY
+        //  IMAGE PROCESSING & CAPTURE
         // ==========================================
 
         async function processPhotoVisuals(p) {
@@ -1105,13 +1043,11 @@
             state.settings.nextNum++;
             localStorage.setItem('fc_num', state.settings.nextNum); 
             
-            // Determine Captions: Use Series if locked, otherwise defaults
             let c1 = state.settings.defC1;
             let c2 = state.settings.defC2;
             let c3 = state.settings.defC3;
             let metaNote = "";
 
-            // NEW: Override if Series Mode is Active AND Locked (seriesCaptions exists)
             if (state.seriesMode && state.seriesCaptions) {
                 c1 = state.seriesCaptions.c1;
                 c2 = state.seriesCaptions.c2;
@@ -1135,30 +1071,26 @@
             state.photos.unshift(photo); 
             renderGallery();
             
-            // NEW: Skip editor if Series Mode is LOCKED (meaning we have captions)
             if (state.seriesMode && state.seriesCaptions) {
-                // Show tiny visual feedback instead of full modal
                 if(navigator.vibrate) navigator.vibrate(50);
-                // Maybe a toast?
             } else {
                 openEditor(photo.id);
             }
         }
 
-        async function capturePhoto() {
-            // Simplified capturePhoto just triggers native input
-            ui.nativeInput.click();
-        }
+        async function capturePhoto() { ui.nativeInput.click(); }
+
+        // ==========================================
+        //  EXPORTING LOGIC (PDF/ZIP)
+        // ==========================================
 
         async function createPDFDoc(photos, notes) {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF({ unit: 'mm', format: 'letter' });
             const margin = 15; let y = margin; const pW = 215.9; const pH = 279.4;
             
-            // Logo Logic
             if (state.settings.logo) {
-                const logoW = 40; // Fixed width for logo
-                const logoH = 20; // Max height
+                const logoW = 40; const logoH = 20; 
                 doc.addImage(state.settings.logo, 'PNG', margin, 10, logoW, logoH, undefined, 'FAST');
             }
 
@@ -1214,10 +1146,10 @@
         }
 
         async function generatePDFReport() {
-            if (!window.jspdf) return alert("PDF Lib Missing");
+            if (!window.jspdf) return showAlert("PDF Lib Missing");
             setProcessing(true, "Generating PDF..."); 
             await new Promise(r => setTimeout(r, 100));
-            try { const photos = await DB.getAll('photos'); const notes = await DB.getAll('notes'); const doc = await createPDFDoc(photos, notes); doc.save(`${state.settings.reportTitle.replace(/ /g,"_")}.pdf`); } catch(e) { console.error(e); alert("PDF Error: "+e.message); } finally { setProcessing(false); }
+            try { const photos = await DB.getAll('photos'); const notes = await DB.getAll('notes'); const doc = await createPDFDoc(photos, notes); doc.save(`${state.settings.reportTitle.replace(/ /g,"_")}.pdf`); } catch(e) { console.error(e); showAlert("PDF Error: "+e.message); } finally { setProcessing(false); }
         }
 
         function generateMapHTML(photos) {
@@ -1245,17 +1177,57 @@
                 const doc = await createPDFDoc(photos, notes); folderReport.file(`${state.settings.reportTitle.replace(/ /g,"_")}.pdf`, doc.output('blob'));
                 const mapHTML = generateMapHTML(photos); folderReport.file("Project_Map.html", mapHTML);
                 const content = await zip.generateAsync({type:"blob"}); saveAs(content, `Project_Export_${state.settings.projectId || "FieldCam"}_${Date.now()}.zip`);
-            } catch (e) { alert("Export Failed: " + e.message); console.error(e); } finally { setProcessing(false); }
+            } catch (e) { showAlert("Export Failed: " + e.message); console.error(e); } finally { setProcessing(false); }
         }
 
+        // --- UPDATED: Optimized JSON Export Logic (Sequential Processing + FileReader) ---
         async function createBackupBlob() {
-            const ph = await DB.getAll('photos'); const nt = await DB.getAll('notes'); 
-            const ex = await Promise.all(ph.map(async p => { 
-                if (!p) return null; let b; if (p.finalBuffer) b = p.finalBuffer; else if (p.finalBlob) try { b = await blobToBuffer(p.finalBlob); } catch(err) { return null; } if (!b) return null; 
-                let bin = ''; const by = new Uint8Array(b); for(let i=0; i<by.byteLength; i++) bin += String.fromCharCode(by[i]); 
-                return { ...p, b64: btoa(bin), finalBuffer:null, finalBlob:null, displayUrl:null, originalBlob:null }; 
-            }));
-            const validEx = ex.filter(x => x !== null);
+            const ph = await DB.getAll('photos'); 
+            const nt = await DB.getAll('notes'); 
+            
+            // Helper for efficient Base64 using Native FileReader (Faster, less memory than String loop)
+            const blobToBase64 = (blob) => new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    const res = reader.result;
+                    // Handle potential null result or missing comma
+                    resolve(res ? res.split(',')[1] : ''); 
+                };
+                reader.readAsDataURL(blob);
+            });
+
+            // Process sequentially to be kind to memory (Promise.all executes essentially in parallel which spikes RAM)
+            const validEx = [];
+            for (const p of ph) {
+                if (!p) continue;
+                
+                let blob = null;
+                if (p.finalBuffer) {
+                    blob = new Blob([p.finalBuffer], {type: 'image/jpeg'});
+                } else if (p.finalBlob) {
+                    blob = p.finalBlob;
+                }
+
+                if (blob) {
+                    try {
+                        const b64 = await blobToBase64(blob);
+                        // We push a CLEAN object with just the Base64 string, not the binary buffers
+                        validEx.push({ 
+                            ...p, 
+                            b64: b64, 
+                            finalBuffer: null, 
+                            finalBlob: null, 
+                            displayUrl: null, 
+                            originalBlob: null 
+                        });
+                    } catch (e) {
+                        console.error("Error converting photo", p.id, e);
+                    }
+                }
+            }
+
+            // Note: JSON.stringify still creates a massive string in memory.
+            // For 1GB files, this line below is usually where the browser crashes.
             return new Blob([JSON.stringify({v:1, project:state.settings.projectId, photos:validEx, notes:nt})], {type:"application/json"});
         }
 
@@ -1263,7 +1235,7 @@
             setProcessing(true, "Zipping...");
             const zip = new JSZip();
             const targets = idSet ? state.photos.filter(p => idSet.has(p.id)) : state.photos;
-            if (targets.length === 0) { setProcessing(false); return alert("No photos to download."); }
+            if (targets.length === 0) { setProcessing(false); return showAlert("No photos to download."); }
             let csv = "Filename,Date,Lat,Lon,Direction,Note,Cap1,Cap2,Cap3\n";
             for (const p of targets) {
                 let blob = p.finalBlob;
@@ -1274,11 +1246,11 @@
                 }
             }
             zip.file("metadata.csv", csv);
-            try { const content = await zip.generateAsync({type:"blob"}); saveAs(content, `FieldCam_Export_${Date.now()}.zip`); } catch (e) { alert("Zip Failed: " + e.message); } finally { setProcessing(false); }
+            try { const content = await zip.generateAsync({type:"blob"}); saveAs(content, `FieldCam_Export_${Date.now()}.zip`); } catch (e) { showAlert("Zip Failed: " + e.message); } finally { setProcessing(false); }
         }
 
         // ==========================================
-        //  EVENT LISTENERS (NOW SAFE)
+        //  EVENT LISTENERS & APP SETUP
         // ==========================================
 
         function setupEventListeners() {
@@ -1326,7 +1298,7 @@
                         await DB.add('photos', await prepPhotoForSave(p)); 
                         renderGallery(); 
                         if(ui.previewModal) ui.previewModal.classList.add('hidden'); 
-                    } catch(e) { alert("Save error: " + e.message); } 
+                    } catch(e) { showAlert("Save error: " + e.message); } 
                     setProcessing(false); 
                 };
             }
@@ -1335,12 +1307,11 @@
                 ui.nativeInput.onchange = async (e) => {
                     if (e.target.files && e.target.files[0]) {
                         setProcessing(true, "Processing Native Photo...");
-                        try { await handleCapturedBlob(e.target.files[0]); } catch(e) { alert("Error: " + e.message); } finally { setProcessing(false); ui.nativeInput.value = ''; }
+                        try { await handleCapturedBlob(e.target.files[0]); } catch(e) { showAlert("Error: " + e.message); } finally { setProcessing(false); ui.nativeInput.value = ''; }
                     }
                 };
             }
             
-            // Search Input Logic
             if(ui.searchInput) {
                 ui.searchInput.oninput = (e) => {
                     state.searchQuery = e.target.value.toLowerCase();
@@ -1348,57 +1319,39 @@
                 };
             }
 
-            // NEW: Filter Toggle
-            if(ui.filterBtn && ui.filterPanel) {
-                ui.filterBtn.onclick = () => {
-                    ui.filterPanel.classList.toggle('hidden');
-                };
-            }
-
-            // NEW: Date Range Filter Logic
-            if(ui.dateStart) {
-                ui.dateStart.onchange = (e) => {
-                    state.filterStart = e.target.value;
-                    renderGallery();
-                }
-            }
-            if(ui.dateEnd) {
-                ui.dateEnd.onchange = (e) => {
-                    state.filterEnd = e.target.value;
-                    renderGallery();
-                }
-            }
+            if(ui.filterBtn && ui.filterPanel) ui.filterBtn.onclick = () => ui.filterPanel.classList.toggle('hidden');
+            if(ui.dateStart) ui.dateStart.onchange = (e) => { state.filterStart = e.target.value; renderGallery(); }
+            if(ui.dateEnd) ui.dateEnd.onchange = (e) => { state.filterEnd = e.target.value; renderGallery(); }
 
             if(ui.closeBtn) ui.closeBtn.onclick = () => { if(ui.previewModal) ui.previewModal.classList.add('hidden'); };
             if(ui.downloadAll) ui.downloadAll.onclick = () => downloadZip(null);
             if(ui.downloadSelected) ui.downloadSelected.onclick = () => downloadZip(state.selectedIds);
             
-            // Fixed Reference Errors
             if(ui.exportPdfBtn) ui.exportPdfBtn.onclick = generatePDFReport;
             if(ui.exportPdfGalleryBtn) ui.exportPdfGalleryBtn.onclick = generatePDFReport;
             
-            if(ui.deleteSelected) ui.deleteSelected.onclick = async () => { if(confirm("Delete selected items?")) { for(let id of state.selectedIds) await DB.delete('photos', id); state.photos = state.photos.filter(p=>!state.selectedIds.has(p.id)); state.selectedIds.clear(); toggleSelectMode(); } };
-            if(ui.deleteSingleBtn) ui.deleteSingleBtn.onclick = async () => { if(confirm("Delete this photo?")) { await DB.delete('photos', state.editingId); state.photos = state.photos.filter(p=>p.id!==state.editingId); if(ui.previewModal) ui.previewModal.classList.add('hidden'); renderGallery(); } };
+            if(ui.deleteSelected) ui.deleteSelected.onclick = async () => { if(await showConfirm("Delete selected items?")) { for(let id of state.selectedIds) await DB.delete('photos', id); state.photos = state.photos.filter(p=>!state.selectedIds.has(p.id)); state.selectedIds.clear(); toggleSelectMode(); } };
+            if(ui.deleteSingleBtn) ui.deleteSingleBtn.onclick = async () => { if(await showConfirm("Delete this photo?")) { await DB.delete('photos', state.editingId); state.photos = state.photos.filter(p=>p.id!==state.editingId); if(ui.previewModal) ui.previewModal.classList.add('hidden'); renderGallery(); } };
             if(ui.downloadSingleBtn) ui.downloadSingleBtn.onclick = async () => { const p = state.photos.find(ph => ph.id === state.editingId); if(p) saveAs(p.finalBlob, `IMG_${p.id}.jpg`); };
-            if(ui.openBatchBtn) ui.openBatchBtn.onclick = () => { if(state.selectedIds.size === 0) return alert("Select photos first."); if(ui.batchCountLabel) ui.batchCountLabel.innerText = `${state.selectedIds.size} Selected`; ui.groupInputs.forEach(i => {if(i) i.value = '';}); if(ui.batchModal) ui.batchModal.classList.remove('hidden'); };
+            if(ui.openBatchBtn) ui.openBatchBtn.onclick = () => { if(state.selectedIds.size === 0) return showAlert("Select photos first."); if(ui.batchCountLabel) ui.batchCountLabel.innerText = `${state.selectedIds.size} Selected`; ui.groupInputs.forEach(i => {if(i) i.value = '';}); if(ui.batchModal) ui.batchModal.classList.remove('hidden'); };
             if(ui.cancelBatchBtn) ui.cancelBatchBtn.onclick = () => { if(ui.batchModal) ui.batchModal.classList.add('hidden'); state.selectedIds.clear(); renderGallery(); };
             if(ui.applyBatchBtn) ui.applyBatchBtn.onclick = async () => { const [c1, c2, c3, n] = ui.groupInputs.map(i => i ? i.value : ""); if(!c1 && !c2 && !c3 && !n) return ui.batchModal.classList.add('hidden'); if(ui.batchModal) ui.batchModal.classList.add('hidden'); setProcessing(true); await new Promise(r => setTimeout(r, 50)); for (const id of state.selectedIds) { const p = state.photos.find(ph => ph.id === id); if(p) { if(c1) p.captions.c1 = c1; if(c2) p.captions.c2 = c2; if(c3) p.captions.c3 = c3; if(n) p.metaNote = n; await processPhotoVisuals(p); await DB.add('photos', await prepPhotoForSave(p)); } } setProcessing(false); state.selectedIds.clear(); renderGallery(); };
             if(ui.toggleSelect) ui.toggleSelect.onclick = toggleSelectMode; 
             if(ui.cancelSelectBtn) ui.cancelSelectBtn.onclick = toggleSelectMode;
 
-            if(ui.backupBtn) ui.backupBtn.onclick = async () => { setProcessing(true); try { const blob = await createBackupBlob(); saveAs(blob, `Backup.json`); } catch(e){ alert("Backup Failed: "+e.message); } setProcessing(false); };
+            if(ui.backupBtn) ui.backupBtn.onclick = async () => { setProcessing(true); try { const blob = await createBackupBlob(); saveAs(blob, `Backup.json`); } catch(e){ showAlert("Backup Failed: "+e.message); } setProcessing(false); };
             if(ui.emailBackupBtn) ui.emailBackupBtn.onclick = async () => {
-                if (!navigator.share || !navigator.canShare) return alert("Sharing not supported.");
+                if (!navigator.share || !navigator.canShare) return showAlert("Sharing not supported.");
                 setProcessing(true, "Preparing Email...");
                 try {
                     const blob = await createBackupBlob();
                     const file = new File([blob], "backup.json", { type: "application/json" });
                     if (navigator.canShare({ files: [file] })) await navigator.share({ files: [file], title: 'Field Cam Backup', text: `Backup for Project: ${state.settings.projectId}` });
-                } catch (e) { if (e.name !== 'AbortError') alert("Share Failed: " + e.message); } finally { setProcessing(false); }
+                } catch (e) { if (e.name !== 'AbortError') showAlert("Share Failed: " + e.message); } finally { setProcessing(false); }
             };
             
             if(ui.restoreBtn) ui.restoreBtn.onclick = () => { if(ui.restoreInput) ui.restoreInput.click(); };
-            if(ui.restoreInput) ui.restoreInput.onchange = (e) => { const f=e.target.files[0]; if(!f)return; const r=new FileReader(); r.onload=async(evt)=>{ try{ const d=JSON.parse(evt.target.result); await DB.clear('photos'); await DB.clear('notes'); for(let n of d.notes) await DB.add('notes',n); for(let p of d.photos) { const bs=atob(p.b64); const len=bs.length; const by=new Uint8Array(len); for(let i=0;i<len;i++) by[i]=bs.charCodeAt(i); delete p.b64; p.finalBuffer=by.buffer; await DB.add('photos',p); } alert("Project Restored Successfully"); location.reload(); }catch(e){alert("Restore Failed: "+e.message);} }; r.readAsText(f); };
+            if(ui.restoreInput) ui.restoreInput.onchange = (e) => { const f=e.target.files[0]; if(!f)return; const r=new FileReader(); r.onload=async(evt)=>{ try{ const d=JSON.parse(evt.target.result); await DB.clear('photos'); await DB.clear('notes'); for(let n of d.notes) await DB.add('notes',n); for(let p of d.photos) { const bs=atob(p.b64); const len=bs.length; const by=new Uint8Array(len); for(let i=0;i<len;i++) by[i]=bs.charCodeAt(i); delete p.b64; p.finalBuffer=by.buffer; await DB.add('photos',p); } showAlert("Project Restored Successfully"); location.reload(); }catch(e){showAlert("Restore Failed: "+e.message);} }; r.readAsText(f); };
 
             if(ui.quickShareBtn) {
                 ui.quickShareBtn.onclick = async () => {
@@ -1425,7 +1378,7 @@
                         const zipBlob = await zip.generateAsync({type:"blob"});
                         const file = new File([zipBlob], `Project_${state.settings.projectId || "Export"}.zip`, { type: "application/zip" });
                         if (navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: 'Field Cam Project Export', text: `Project Export: ${state.settings.projectId}` }); } else { throw new Error("Sharing not supported for this file type."); }
-                    } catch(e) { if (e.name !== 'AbortError') alert("Share Failed: " + e.message); } finally { setProcessing(false); }
+                    } catch(e) { if (e.name !== 'AbortError') showAlert("Share Failed: " + e.message); } finally { setProcessing(false); }
                 };
             }
 
@@ -1435,7 +1388,7 @@
             if(ui.closeSettingsBtn) ui.closeSettingsBtn.onclick = () => { if(ui.projectModal) ui.projectModal.classList.add('hidden'); };
             if(ui.saveProjectBtn) ui.saveProjectBtn.onclick = saveSettingsUI;
             
-            if(ui.newVisitBtn) ui.newVisitBtn.onclick = async () => { if(confirm("Reset project? This will clear all local photos and notes.")) { await DB.clear('photos'); await DB.clear('notes'); state.photos=[]; state.notes=[]; state.selectedIds.clear(); state.settings.nextNum=1; localStorage.setItem('fc_num',1); renderGallery(); renderNotes(); renderMapMarkers(); loadSettingsUI(); } };
+            if(ui.newVisitBtn) ui.newVisitBtn.onclick = async () => { if(await showConfirm("Reset project? This will clear all local photos and notes.")) { await DB.clear('photos'); await DB.clear('notes'); state.photos=[]; state.notes=[]; state.selectedIds.clear(); state.settings.nextNum=1; localStorage.setItem('fc_num',1); renderGallery(); renderNotes(); renderMapMarkers(); loadSettingsUI(); } };
             if(ui.navCamera) ui.navCamera.onclick = () => switchModule('camera'); 
             if(ui.navNotes) ui.navNotes.onclick = () => switchModule('notes'); 
             if(ui.navMap) ui.navMap.onclick = () => switchModule('map');
@@ -1445,7 +1398,7 @@
             if(ui.exportNotesBtn) ui.exportNotesBtn.onclick = exportNotes;
             if(ui.downloadProjectBtn) ui.downloadProjectBtn.onclick = downloadProject;
             
-            // Annotation Event Listeners (GUARDED)
+            // Annotation Event Listeners
             if (ui.annotateBtn) ui.annotateBtn.onclick = () => openAnnotationTool(state.editingId);
             if (ui.cancelAnnotationBtn) ui.cancelAnnotationBtn.onclick = () => { if(ui.annotationModal) ui.annotationModal.classList.add('hidden'); };
             if (ui.saveAnnotationBtn) ui.saveAnnotationBtn.onclick = saveAnnotation;
@@ -1458,7 +1411,6 @@
                 }
             };
             
-            // Drawing Events (GUARDED)
             if (ui.annotationCanvas) {
                 ui.annotationCanvas.addEventListener('mousedown', startDrawing);
                 ui.annotationCanvas.addEventListener('mousemove', draw);
@@ -1469,18 +1421,15 @@
                 ui.annotationCanvas.addEventListener('touchend', stopDrawing);
             }
             
-            // NEW: Logo Handling (Guarded)
             if(ui.logoInput) {
                 ui.logoInput.onchange = (e) => {
                     const file = e.target.files[0];
                     if (!file) return;
 
-                    // Resize logic before saving to state
                     const reader = new FileReader();
                     reader.onload = (event) => {
                         const img = new Image();
                         img.onload = () => {
-                            // Max dimensions for logo
                             const MAX_W = 400; 
                             const MAX_H = 200;
                             let w = img.width;
@@ -1499,11 +1448,9 @@
                             
                             const resizedData = cvs.toDataURL('image/png', 0.8);
                             
-                            // Save to state
                             state.settings.logo = resizedData;
                             localStorage.setItem('fc_logo', resizedData);
                             
-                            // Update UI
                             if(ui.logoPreview) {
                                 ui.logoPreview.src = resizedData;
                                 ui.logoPreview.classList.remove('hidden');
@@ -1543,24 +1490,19 @@
             const canvas = ui.annotationCanvas;
             const ctx = canvas.getContext('2d');
             state.ctx = ctx;
-            state.annotationHistory = []; // Reset history
+            state.annotationHistory = []; 
             
-            // Load image
             const img = await createImageFromBlob(p.finalBlob || (p.finalBuffer ? new Blob([p.finalBuffer]) : null));
             canvas.width = img.width;
             canvas.height = img.height;
             ctx.drawImage(img, 0, 0);
             
-            // Save initial state for undo
             state.annotationHistory.push(canvas.toDataURL());
-            
             setProcessing(false);
         }
         
         function getPenColor() {
-            for (const radio of ui.colorRadios) {
-                if (radio.checked) return radio.value;
-            }
+            for (const radio of ui.colorRadios) { if (radio.checked) return radio.value; }
             return '#ef4444';
         }
         
@@ -1573,9 +1515,8 @@
             state.lastX = (e.clientX - rect.left) * scaleX;
             state.lastY = (e.clientY - rect.top) * scaleY;
             
-            // Save state before starting a new stroke
             state.annotationHistory.push(ui.annotationCanvas.toDataURL());
-            if (state.annotationHistory.length > 5) state.annotationHistory.shift(); // Limit undo stack
+            if (state.annotationHistory.length > 5) state.annotationHistory.shift(); 
         }
         
         function draw(e) {
@@ -1592,7 +1533,7 @@
             ctx.moveTo(state.lastX, state.lastY);
             ctx.lineTo(x, y);
             ctx.strokeStyle = getPenColor();
-            ctx.lineWidth = ui.annotationCanvas.width / 150; // Dynamic thickness
+            ctx.lineWidth = ui.annotationCanvas.width / 150; 
             ctx.lineCap = 'round';
             ctx.stroke();
             
@@ -1600,42 +1541,46 @@
             state.lastY = y;
         }
         
-        function stopDrawing() {
-            state.isDrawing = false;
-        }
+        function stopDrawing() { state.isDrawing = false; }
         
         async function saveAnnotation() {
             if (!state.editingId) return;
             setProcessing(true, "Saving Annotation...");
-            
             await new Promise(r => setTimeout(r, 50));
-            
             try {
                 const canvas = ui.annotationCanvas;
                 const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.9));
                 
                 const p = state.photos.find(ph => ph.id === state.editingId);
-                // Update final blob
                 p.finalBlob = blob;
-                p.displayUrl = URL.createObjectURL(blob); // Update display URL immediately
-                p.finalBuffer = null; // Clear old buffer so it regenerates
+                p.displayUrl = URL.createObjectURL(blob); 
+                p.finalBuffer = null; 
                 
-                // Save to DB
                 await DB.add('photos', await prepPhotoForSave(p));
                 
-                // Close modal and reopen preview
                 if(ui.annotationModal) ui.annotationModal.classList.add('hidden');
                 if(ui.previewModal) ui.previewModal.classList.remove('hidden');
-                
-                // Refresh preview image
                 if (ui.previewImg) ui.previewImg.src = p.displayUrl;
-                renderGallery(); // Update thumbnail
-                
-            } catch (e) {
-                alert("Error saving drawing: " + e.message);
-            }
-            
+                renderGallery(); 
+            } catch (e) { showAlert("Error saving drawing: " + e.message); }
             setProcessing(false);
+        }
+
+        // Safety & Restore
+        function setupSafetyGuards() {
+             window.onbeforeunload = (e) => {
+                 if (state.photos.length > 0 || state.notes.length > 0) {
+                     e.preventDefault();
+                     e.returnValue = "You have unsaved local data. Please export your project before closing.";
+                     return e.returnValue;
+                 }
+             };
+        }
+
+        async function requestPersistence() {
+             if (navigator.storage && navigator.storage.persist) {
+                 await navigator.storage.persist();
+             }
         }
 
         function setupProject() {
@@ -1644,6 +1589,8 @@
              initLocation(); 
              setupDictation(); 
              setupEventListeners();
+             setupSafetyGuards(); 
+             requestPersistence(); 
              restoreSession();
         }
 
