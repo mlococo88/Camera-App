@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Field Cam">
-    <title>Field Cam Pro (Project Manager)</title>
+    <title>Field Cam Pro (Cloud Sync)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -53,6 +53,7 @@
         .leaflet-popup-tip { background: #374151; }
         .leaflet-popup-content { margin: 10px; font-size: 12px; }
         
+        /* Cloud Status Indicator */
         .cloud-status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 4px; }
         .cloud-off { background-color: #6b7280; }
         .cloud-on { background-color: #22c55e; }
@@ -76,12 +77,15 @@
             </button>
         </div>
         <div class="flex items-center gap-2">
+            <!-- Cloud Sync Indicator -->
             <button id="cloud-sync-btn" class="p-2 bg-gray-700 hover:bg-gray-600 rounded text-gray-300 shadow transition-colors relative" title="Cloud Sync Status">
                 <div id="cloud-icon-status" class="absolute top-1 right-1 w-2 h-2 rounded-full bg-gray-500 border border-gray-700"></div>
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
                 </svg>
             </button>
+
+            <!-- Quick Share Button -->
             <button id="quick-share-btn" class="p-2 bg-blue-600 hover:bg-blue-500 rounded text-white shadow transition-colors" title="Export/Share Project">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
@@ -97,7 +101,7 @@
         </div>
     </header>
 
-    <!-- MODULES -->
+    <!-- MODULES (Camera, Notes, Map) -->
     <section id="module-camera" class="flex-1 flex flex-col md:flex-row overflow-hidden relative">
         <div id="camera-container" class="relative h-[30%] md:h-full md:flex-1 flex flex-col items-center justify-center bg-gray-800 border-b border-gray-700">
             <div id="native-mode-ui" class="absolute inset-0 flex flex-col items-center justify-center z-10 p-4">
@@ -113,6 +117,7 @@
                 </button>
             </div>
             <input type="file" id="native-cam-input" accept="image/*" capture="environment" class="hidden">
+            <!-- Placeholders for code compatibility -->
             <video id="video" class="hidden"></video>
             <div id="native-mode-placeholder" class="hidden"></div>
             <button id="torch-btn" class="hidden"></button>
@@ -197,15 +202,27 @@
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" /></svg>
                     <h3 class="text-xs font-bold text-blue-400 uppercase tracking-wider">Cloud Sync</h3>
                 </div>
+                
                 <div class="flex items-center justify-between">
                     <span class="text-sm">Enable Cloud Sync</span>
-                    <label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" id="set-cloud-enable" class="sr-only peer"><div class="w-11 h-6 bg-gray-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 peer-checked:bg-blue-600"></div></label>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="set-cloud-enable" class="sr-only peer">
+                        <div class="w-11 h-6 bg-gray-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 peer-checked:bg-blue-600"></div>
+                    </label>
                 </div>
+                
+                <div>
+                    <label class="block text-xs text-gray-400 mb-1">Project ID (Must match on other devices)</label>
+                    <input type="text" id="set-proj-id" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-600 text-sm font-mono" placeholder="e.g. Bridge-505">
+                    <p class="text-[10px] text-gray-500 mt-1">Files synced to this Project ID are visible to anyone with this ID.</p>
+                </div>
+                
                 <div id="auth-status-container" class="mt-2 p-2 bg-gray-800 rounded border border-gray-700 hidden">
                      <p class="text-[10px] text-green-400 mb-1">Logged in as:</p>
                      <p id="user-email-display" class="text-xs font-bold text-white truncate mb-2">...</p>
                      <button id="logout-btn" class="w-full bg-red-900/50 hover:bg-red-800 text-red-200 text-xs py-2 rounded border border-red-800">Sign Out</button>
                 </div>
+
                 <div id="cloud-status-msg" class="text-xs text-gray-400 italic">Status: Offline</div>
             </div>
 
@@ -296,33 +313,21 @@
         </div>
     </div>
 
-    <!-- Login Modal -->
-    <div id="login-modal" class="fixed inset-0 z-[60] bg-black/95 hidden flex items-center justify-center p-4">
-        <div class="bg-gray-800 rounded-xl w-full max-w-sm p-6 border border-gray-700 shadow-2xl">
-            <h3 class="text-xl font-bold text-white mb-4">Cloud Login</h3>
-            <div class="space-y-3">
-                <div><label class="block text-xs text-gray-400 mb-1">Email</label><input type="email" id="login-email" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-600 text-sm"></div>
-                <div><label class="block text-xs text-gray-400 mb-1">Password</label><input type="password" id="login-password" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-600 text-sm"></div>
-                <div id="login-error" class="text-red-500 text-xs hidden">Invalid credentials</div>
-                <button id="login-submit-btn" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded text-sm mt-2">Log In</button>
-                <button id="login-cancel-btn" class="w-full bg-transparent text-gray-400 text-xs py-2 hover:text-white">Cancel</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Other Modals (Batch, Preview, Alert) - Kept same structure -->
+    <!-- Modals -->
     <div id="batch-modal" class="fixed inset-0 z-50 bg-black/95 hidden flex flex-col justify-end md:justify-center p-4">
         <div class="bg-gray-800 rounded-t-xl md:rounded-xl w-full max-w-md p-6 space-y-4 shadow-2xl border border-gray-700 mx-auto">
             <div class="flex justify-between items-center mb-2"><h3 class="text-lg font-bold text-white">Batch Edit</h3><span class="text-xs text-gray-400 bg-gray-700 px-2 py-1 rounded" id="batch-count-label">0 Selected</span></div>
             <div class="space-y-3 max-h-[60vh] overflow-y-auto">
+                <p class="text-[10px] text-gray-500 italic">Enter text to overwrite. Leave blank to keep existing data.</p>
                 <div><label class="block text-xs uppercase text-gray-400 font-bold mb-1">Caption 1 (Top)</label><input type="text" id="group-caption-1" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-600 text-sm"></div>
                 <div><label class="block text-xs uppercase text-gray-400 font-bold mb-1">Caption 2 (Middle)</label><input type="text" id="group-caption-2" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-600 text-sm"></div>
                 <div><label class="block text-xs uppercase text-gray-400 font-bold mb-1">Caption 3 (Bottom)</label><input type="text" id="group-caption-3" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-600 text-sm"></div>
-                <div><label class="block text-xs uppercase text-gray-400 font-bold mb-1 flex justify-between"><span>Notes</span><button id="group-mic-btn" class="text-blue-400 hover:text-white">Mic</button></label><textarea id="group-notes" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-600 text-sm h-20 resize-none"></textarea></div>
+                <div><label class="block text-xs uppercase text-gray-400 font-bold mb-1 flex justify-between"><span>Notes (Metadata)</span><button id="group-mic-btn" class="text-blue-400 hover:text-white">Mic</button></label><textarea id="group-notes" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-600 text-sm h-20 resize-none"></textarea></div>
             </div>
             <div class="flex gap-2 pt-2"><button id="cancel-batch-btn" class="flex-1 bg-gray-700 text-white font-bold py-3 rounded text-sm">Cancel</button><button id="apply-batch-btn" class="flex-1 bg-blue-600 text-white font-bold py-3 rounded text-sm">Apply</button></div>
         </div>
     </div>
+    
     <div id="preview-modal" class="fixed inset-0 z-50 bg-black/95 hidden flex flex-col">
         <div class="flex justify-between items-center p-4 bg-gray-900 border-b border-gray-800 shrink-0 safe-top-padding">
             <div class="flex items-center gap-3"><button id="close-preview-btn" class="text-gray-400 p-2 hover:text-white transition-colors"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></button></div>
@@ -337,12 +342,28 @@
             </div>
         </div>
     </div>
+
+    <!-- Login Modal -->
+    <div id="login-modal" class="fixed inset-0 z-[60] bg-black/95 hidden flex items-center justify-center p-4">
+        <div class="bg-gray-800 rounded-xl w-full max-w-sm p-6 border border-gray-700 shadow-2xl">
+            <h3 class="text-xl font-bold text-white mb-4">Cloud Login</h3>
+            <div class="space-y-3">
+                <div><label class="block text-xs text-gray-400 mb-1">Email</label><input type="email" id="login-email" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-600 text-sm"></div>
+                <div><label class="block text-xs text-gray-400 mb-1">Password</label><input type="password" id="login-password" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-600 text-sm"></div>
+                <div id="login-error" class="text-red-500 text-xs hidden">Invalid credentials</div>
+                <button id="login-submit-btn" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded text-sm mt-2">Log In</button>
+                <button id="login-cancel-btn" class="w-full bg-transparent text-gray-400 text-xs py-2 hover:text-white">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <div id="custom-alert-overlay" class="fixed inset-0 z-[100] custom-modal-overlay hidden flex items-center justify-center p-4 animate-fade-in">
         <div class="bg-gray-800 rounded-lg shadow-2xl max-w-sm w-full border border-gray-700 transform transition-all">
             <div class="p-5"><h3 class="text-lg font-medium text-white mb-2" id="alert-title">Notice</h3><p class="text-gray-300 text-sm" id="alert-message">Message goes here.</p></div>
             <div class="p-4 border-t border-gray-700 flex justify-end gap-2"><button id="alert-cancel-btn" class="hidden px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded transition-colors">Cancel</button><button id="alert-ok-btn" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded shadow transition-colors">OK</button></div>
         </div>
     </div>
+    
     <div id="processing-overlay" class="absolute inset-0 z-50 bg-black/80 flex flex-col items-center justify-center hidden backdrop-blur-sm"><div class="loader mb-4"></div><p id="processing-text" class="text-white font-semibold">Processing...</p></div>
 
     <script type="module">
@@ -415,7 +436,7 @@
         };
 
         const ui = {
-            cloudBtn: document.getElementById('cloud-sync-btn'), cloudStatus: document.getElementById('cloud-icon-status'), sCloudEnable: document.getElementById('set-cloud-enable'),
+            cloudBtn: document.getElementById('cloud-sync-btn'), cloudStatus: document.getElementById('cloud-icon-status'), cloudMsg: document.getElementById('cloud-status-msg'), sCloudEnable: document.getElementById('set-cloud-enable'),
             loginModal: document.getElementById('login-modal'), loginEmail: document.getElementById('login-email'), loginPass: document.getElementById('login-password'), loginSubmit: document.getElementById('login-submit-btn'), loginCancel: document.getElementById('login-cancel-btn'), loginError: document.getElementById('login-error'),
             authStatusContainer: document.getElementById('auth-status-container'), userEmailDisplay: document.getElementById('user-email-display'), logoutBtn: document.getElementById('logout-btn'),
             // Project UI
@@ -441,6 +462,180 @@
             gpsStatus: document.getElementById('gps-status-label'), weatherStatus: document.getElementById('weather-status')
         };
 
+        // --- EXPORT FUNCTIONS (Defined Globally) ---
+        function exportNotes() {
+            if (state.notes.length === 0) return showAlert("No notes to export.");
+            const csvContent = "data:text/csv;charset=utf-8," 
+                + "ID,Timestamp,Location,Text\n"
+                + state.notes.map(n => `${n.id},"${n.timestamp}","${n.location}","${n.text.replace(/"/g, '""')}"`).join("\n");
+            
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `field_notes_${Date.now()}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        async function createPDFDoc(photos, notes) {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({ unit: 'mm', format: 'letter' });
+            const margin = 15; let y = margin; const pW = 215.9; const pH = 279.4;
+            
+            if (state.settings.logo) {
+                const logoW = 40; const logoH = 20; 
+                doc.addImage(state.settings.logo, 'PNG', margin, 10, logoW, logoH, undefined, 'FAST');
+            }
+
+            doc.setFontSize(22); doc.text(state.settings.reportTitle, pW/2, 40, null, null, "center");
+            doc.setFontSize(14); doc.text(`Project: ${state.settings.projectId || "N/A"}`, pW/2, 60, null, null, "center");
+            if(state.settings.author) doc.text(`Inspector: ${state.settings.author}`, pW/2, 68, null, null, "center");
+            doc.text(`Date: ${new Date().toLocaleDateString()}`, pW/2, 76, null, null, "center");
+            if (state.weather && state.settings.incMap) doc.text(`Weather: ${state.weather}`, pW/2, 90, null, null, "center");
+
+            if (state.settings.incNotes && notes && notes.length > 0) {
+                doc.addPage(); y = margin; doc.setFontSize(16); doc.text("Field Observations", margin, y); y += 10; doc.setFontSize(11);
+                notes.sort((a,b) => a.id - b.id).forEach(n => {
+                    doc.setFont("helvetica", "bold"); doc.text(`${n.timestamp} | ${n.location}`, margin, y); y += 6;
+                    doc.setFont("helvetica", "normal"); const lines = doc.splitTextToSize(n.text, pW-(margin*2)); doc.text(lines, margin, y); y += (lines.length*6)+6;
+                    if (y > pH - margin) { doc.addPage(); y = margin; }
+                });
+            }
+
+            if (photos && photos.length > 0) {
+                photos.sort((a,b) => a.id - b.id); doc.addPage(); y = margin; doc.setFontSize(16); doc.setFont("helvetica", "bold"); doc.text("Photo Log", margin, y); y += 15;
+                const layout = state.settings.pdfLayout; 
+                let slotW = 127; let slotH = 76.2; 
+                if (layout === 1) { slotW = 170; slotH = 102; } else if (layout === 4) { slotW = 85; slotH = 51; }
+
+                for (let i = 0; i < photos.length; i++) {
+                    const p = photos[i];
+                    let b; if (p.finalBuffer) b = new Blob([p.finalBuffer], {type: 'image/jpeg'}); else if (p.finalBlob) b = p.finalBlob; else continue;
+                    const bmp = await createImageBitmap(b);
+                    const w = state.settings.pdfRes; const h = (bmp.height / bmp.width) * w;
+                    const cvs = document.createElement('canvas'); cvs.width = w; cvs.height = h; cvs.getContext('2d').drawImage(bmp, 0, 0, w, h);
+                    const data = cvs.toDataURL('image/jpeg', 0.8);
+                    const dim = getAspectFit(bmp.width, bmp.height, slotW, slotH);
+                    const offX = (slotW - dim.w) / 2; const offY = (slotH - dim.h) / 2;
+
+                    if (layout === 4) {
+                        const col = i % 2; const rowX = margin + (col * (slotW + 15)); const isPageStart = i > 0 && i % 4 === 0; const isOutOfSpace = y + slotH + 30 > pH - margin;
+                        if (col === 0 && (isPageStart || isOutOfSpace)) { doc.addPage(); y = margin; }
+                        doc.addImage(data, 'JPEG', rowX + offX, y + offY, dim.w, dim.h);
+                        let capY = y + slotH + 5; doc.setFontSize(9); doc.setFont("helvetica", "bold"); doc.text(`#${p.photoNumber} - ${p.timestamp}`, rowX, capY);
+                        doc.setFont("helvetica", "normal"); doc.setFontSize(8); const capText = [p.captions.c1, p.captions.c2].filter(Boolean).join(" | "); if (capText) doc.text(capText, rowX, capY+4);
+                        if (col === 1 || i === photos.length - 1) { y += slotH + 20; }
+                    } else {
+                        if (y + slotH + 25 > pH - margin) { doc.addPage(); y = margin; }
+                        const centerX = (pW - slotW) / 2; doc.addImage(data, 'JPEG', centerX + offX, y + offY, dim.w, dim.h); y += slotH + 5;
+                        doc.setFontSize(10); doc.setFont("helvetica", "bold"); doc.text(`Photo #${p.photoNumber} - ${p.timestamp}`, margin, y); y += 5;
+                        doc.setFont("helvetica", "normal"); doc.setFontSize(9); const cap = [p.captions.c1, p.captions.c2, p.captions.c3].filter(Boolean).join(" | "); if (cap) { doc.text(cap, margin, y); y += 5; }
+                        if (p.metaNote) { const nt = doc.splitTextToSize("Note: "+p.metaNote, pW-(margin*2)); doc.text(nt, margin, y); y += (nt.length*4); }
+                        y += 8;
+                    }
+                }
+            }
+            return doc;
+        }
+
+        async function generatePDFReport() {
+            if (!window.jspdf) return showAlert("PDF Lib Missing");
+            setProcessing(true, "Generating PDF..."); 
+            await new Promise(r => setTimeout(r, 100));
+            try { 
+                const photos = await DB.getAll('photos'); 
+                const notes = await DB.getAll('notes'); 
+                const doc = await createPDFDoc(photos, notes); 
+                doc.save(`${state.settings.reportTitle.replace(/ /g,"_")}.pdf`); 
+            } catch(e) { 
+                console.error(e); 
+                showAlert("PDF Error: "+e.message); 
+            } finally { 
+                setProcessing(false); 
+            }
+        }
+
+        async function downloadProject() {
+            setProcessing(true, "Packaging Project...");
+            try {
+                const zip = new JSZip(); const folderPhotos = zip.folder("Photos"); const folderReport = zip.folder("Report"); const folderData = zip.folder("Data");
+                const photos = await DB.getAll('photos'); let photoLogCSV = "Filename,Date,Time,Latitude,Longitude,Heading,Caption1,Caption2,Caption3,Note\n";
+                for (const p of photos) {
+                    let blob = await blobToBuffer(p.finalBlob || (p.finalBuffer ? new Blob([p.finalBuffer]) : null));
+                    if (blob) {
+                        const filename = `IMG_${p.photoNumber}_${p.id}.jpg`; folderPhotos.file(filename, blob);
+                        const safe = (s) => `"${(s||"").replace(/"/g, '""')}"`;
+                        photoLogCSV += `${filename},${safe(p.timestamp)},${p.lat},${p.lon},${safe(p.compass)},${safe(p.captions.c1)},${safe(p.captions.c2)},${safe(p.captions.c3)},${safe(p.metaNote)}\n`;
+                    }
+                }
+                folderData.file("Photo_Log.csv", photoLogCSV);
+                const notes = await DB.getAll('notes'); let notesCSV = "ID,Timestamp,Location,Text\n";
+                notes.forEach(n => { notesCSV += `${n.id},"${n.timestamp}","${n.location}","${n.text.replace(/"/g, '""')}"\n`; });
+                folderData.file("Field_Notes.csv", notesCSV);
+                const doc = await createPDFDoc(photos, notes); folderReport.file(`${state.settings.reportTitle.replace(/ /g,"_")}.pdf`, doc.output('blob'));
+                const mapHTML = generateMapHTML(photos); folderReport.file("Project_Map.html", mapHTML);
+                const content = await zip.generateAsync({type:"blob"}); 
+                const filename = `Project_Export_${state.settings.projectId || "FieldCam"}_${Date.now()}.zip`;
+                const file = new File([content], filename, { type: "application/zip" });
+                if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                    try { await navigator.share({ files: [file], title: 'Field Cam Project', text: 'Project Export ZIP' }); return; } 
+                    catch (shareError) { if (shareError.name !== 'AbortError') console.warn("Share failed, fallback", shareError); else return; }
+                }
+                saveAs(content, filename);
+            } catch (e) { showAlert("Export Failed: " + e.message); console.error(e); } finally { setProcessing(false); }
+        }
+
+        async function createBackupBlob() {
+            const ph = await DB.getAll('photos'); const nt = await DB.getAll('notes'); 
+            const blobToBase64 = (blob) => new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onloadend = () => { resolve(reader.result ? reader.result.split(',')[1] : ''); };
+                reader.readAsDataURL(blob);
+            });
+            const validEx = [];
+            for (const p of ph) {
+                if (!p) continue;
+                let blob = null;
+                if (p.finalBuffer) blob = new Blob([p.finalBuffer], {type: 'image/jpeg'});
+                else if (p.finalBlob) blob = p.finalBlob;
+                if (blob) {
+                    try {
+                        const b64 = await blobToBase64(blob);
+                        validEx.push({ ...p, b64: b64, finalBuffer: null, finalBlob: null, displayUrl: null, originalBlob: null });
+                    } catch (e) { console.error("Error converting photo", p.id, e); }
+                }
+            }
+            return new Blob([JSON.stringify({v:1, project:state.settings.projectId, photos:validEx, notes:nt})], {type:"application/json"});
+        }
+
+        async function downloadZip(idSet) {
+            setProcessing(true, "Zipping...");
+            const zip = new JSZip();
+            const targets = idSet ? state.photos.filter(p => idSet.has(p.id)) : state.photos;
+            if (targets.length === 0) { setProcessing(false); return showAlert("No photos to download."); }
+            let csv = "Filename,Date,Lat,Lon,Direction,Note,Cap1,Cap2,Cap3\n";
+            for (const p of targets) {
+                let blob = p.finalBlob;
+                if (!blob && p.finalBuffer) blob = new Blob([p.finalBuffer], {type: 'image/jpeg'});
+                if (blob) {
+                    zip.file(`IMG_${p.photoNumber}_${p.id}.jpg`, blob);
+                    csv += `IMG_${p.photoNumber}_${p.id}.jpg,"${p.timestamp}",${p.lat},${p.lon},"${p.compass}","${(p.metaNote||"").replace(/"/g,'""')}","${p.captions.c1}","${p.captions.c2}","${p.captions.c3}"\n`;
+                }
+            }
+            zip.file("metadata.csv", csv);
+            try { 
+                const content = await zip.generateAsync({type:"blob"}); 
+                const filename = `FieldCam_Export_${Date.now()}.zip`;
+                const file = new File([content], filename, { type: "application/zip" });
+                if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                    try { await navigator.share({ files: [file], title: 'Field Cam Export', text: 'Photo Export ZIP' }); return; } 
+                    catch (shareError) { if (shareError.name !== 'AbortError') console.warn("Share failed, fallback", shareError); else return; }
+                }
+                saveAs(content, filename); 
+            } catch (e) { showAlert("Zip Failed: " + e.message); } finally { setProcessing(false); }
+        }
+
         // --- Project Management Logic ---
         async function fetchUserProjects() {
             if(!user) return;
@@ -463,23 +658,15 @@
         }
 
         async function switchProject(newPid) {
-            // Update State
             state.settings.projectId = newPid;
             localStorage.setItem('fc_pid', newPid);
-            
-            // Clear current view
             state.photos = [];
             state.notes = [];
             renderGallery();
             renderNotes();
-            
-            // UI Update
             updateProjectUI(newPid);
-            
-            // Reload Data
-            await restoreSession(); // Loads local data matching PID
+            await restoreSession();
             if(state.settings.cloudEnabled && user) {
-                // Restart listeners for new PID
                 if(unsubscribeNotes) unsubscribeNotes();
                 if(unsubscribePhotos) unsubscribePhotos();
                 startCloudSync(); 
@@ -516,7 +703,7 @@
             ui.projectIdDisplay.innerText = name;
         }
 
-        // Expose to global scope for HTML onclick
+        // Expose to global
         window.switchProject = switchProject;
         window.deleteProject = deleteProject;
 
@@ -548,10 +735,10 @@
         }
         function updateCloudUI(status) {
             ui.cloudStatus.className = 'absolute top-1 right-1 w-2 h-2 rounded-full border border-gray-700 ';
-            if (status === 'off') { ui.cloudStatus.classList.add('bg-gray-500'); }
-            else if (status === 'on') { ui.cloudStatus.classList.add('bg-green-500'); }
-            else if (status === 'error') { ui.cloudStatus.classList.add('bg-red-500'); }
-            else if (status === 'sync') { ui.cloudStatus.classList.add('bg-yellow-400', 'animate-pulse'); }
+            if (status === 'off') { ui.cloudStatus.classList.add('bg-gray-500'); ui.cloudMsg.innerText = "Status: Disabled"; }
+            else if (status === 'on') { ui.cloudStatus.classList.add('bg-green-500'); ui.cloudMsg.innerText = "Status: Connected"; }
+            else if (status === 'error') { ui.cloudStatus.classList.add('bg-red-500'); ui.cloudMsg.innerText = "Status: Auth Error"; }
+            else if (status === 'sync') { ui.cloudStatus.classList.add('bg-yellow-400', 'animate-pulse'); ui.cloudMsg.innerText = "Status: Syncing..."; }
         }
         async function compressForCloud(blob) {
             return new Promise((resolve) => {
@@ -610,7 +797,9 @@
         async function prepPhotoForSave(p) { const b = await (p.finalBlob ? p.finalBlob.arrayBuffer() : null); const s = {...p}; delete s.originalBlob; delete s.displayUrl; delete s.finalBlob; s.finalBuffer = b; return s; }
         function createImageFromBlob(b) { return new Promise(r => { const u = URL.createObjectURL(b); const i = new Image(); i.onload = () => { URL.revokeObjectURL(u); r(i); }; i.src = u; }); }
         function formatGPS(lat, lon) { return (lat && lon) ? `${lat.toFixed(5)}, ${lon.toFixed(5)}` : "No GPS"; }
-        
+        function blobToBuffer(blob) { return blob ? blob.arrayBuffer() : Promise.resolve(null); }
+        function getAspectFit(imgW, imgH, maxW, maxH) { const ratio = Math.min(maxW / imgW, maxH / imgH); return { w: imgW * ratio, h: imgH * ratio }; }
+
         // Renderers - Now Filtered by Project ID
         function renderGallery() { 
             ui.gallery.innerHTML = '';
@@ -736,7 +925,15 @@
             
             // Reattach standard listeners
             if(ui.downloadProjectBtn) ui.downloadProjectBtn.onclick = () => { setProcessing(true); setTimeout(()=>{setProcessing(false); showAlert("Download feature placeholder");},1000); };
+            if(ui.exportNotesBtn) ui.exportNotesBtn.onclick = exportNotes;
+            if(ui.exportPdfBtn) ui.exportPdfBtn.onclick = generatePDFReport;
+            if(ui.exportPdfGalleryBtn) ui.exportPdfGalleryBtn.onclick = generatePDFReport;
             // (Simplified re-attachment of others for brevity, assume maintained)
+        }
+
+        function generateMapHTML(photos) {
+            const markers = photos.filter(p => p.lat && p.lon).map(p => ({ lat: p.lat, lon: p.lon, num: p.photoNumber, note: p.metaNote || "" }));
+            return `<!DOCTYPE html><html><head><title>Project Map</title><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script><style>body{margin:0;padding:0;} #map{height:100vh;width:100%;}</style></head><body><div id="map"></div><script>var map = L.map('map').setView([${markers.length ? markers[0].lat : 39.82}, ${markers.length ? markers[0].lon : -98.58}], ${markers.length ? 13 : 4});L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, attribution:'&copy; OpenStreetMap'}).addTo(map);var data = ${JSON.stringify(markers)};var group = new L.featureGroup();data.forEach(function(d){var m = L.marker([d.lat, d.lon]).addTo(map).bindPopup("<b>Photo #"+d.num+"</b><br>"+d.note);m.addTo(group);});if(data.length) map.fitBounds(group.getBounds().pad(0.1));<\/script></body></html>`;
         }
 
         window.onload = () => {
