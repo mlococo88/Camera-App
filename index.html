@@ -1176,7 +1176,27 @@
                 folderData.file("Field_Notes.csv", notesCSV);
                 const doc = await createPDFDoc(photos, notes); folderReport.file(`${state.settings.reportTitle.replace(/ /g,"_")}.pdf`, doc.output('blob'));
                 const mapHTML = generateMapHTML(photos); folderReport.file("Project_Map.html", mapHTML);
-                const content = await zip.generateAsync({type:"blob"}); saveAs(content, `Project_Export_${state.settings.projectId || "FieldCam"}_${Date.now()}.zip`);
+                const content = await zip.generateAsync({type:"blob"}); 
+                
+                // iOS Fix: Use Navigator Share API first
+                const filename = `Project_Export_${state.settings.projectId || "FieldCam"}_${Date.now()}.zip`;
+                const file = new File([content], filename, { type: "application/zip" });
+
+                if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                    try {
+                        await navigator.share({
+                            files: [file],
+                            title: 'Field Cam Project',
+                            text: 'Project Export ZIP'
+                        });
+                        return; 
+                    } catch (shareError) {
+                        if (shareError.name !== 'AbortError') console.warn("Share failed, fallback to download", shareError);
+                        else return; 
+                    }
+                }
+                
+                saveAs(content, filename);
             } catch (e) { showAlert("Export Failed: " + e.message); console.error(e); } finally { setProcessing(false); }
         }
 
@@ -1246,7 +1266,29 @@
                 }
             }
             zip.file("metadata.csv", csv);
-            try { const content = await zip.generateAsync({type:"blob"}); saveAs(content, `FieldCam_Export_${Date.now()}.zip`); } catch (e) { showAlert("Zip Failed: " + e.message); } finally { setProcessing(false); }
+            try { 
+                const content = await zip.generateAsync({type:"blob"}); 
+                
+                // iOS Fix
+                const filename = `FieldCam_Export_${Date.now()}.zip`;
+                const file = new File([content], filename, { type: "application/zip" });
+
+                if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                    try {
+                        await navigator.share({
+                            files: [file],
+                            title: 'Field Cam Export',
+                            text: 'Photo Export ZIP'
+                        });
+                        return; 
+                    } catch (shareError) {
+                        if (shareError.name !== 'AbortError') console.warn("Share failed, fallback", shareError);
+                        else return; 
+                    }
+                }
+                
+                saveAs(content, filename); 
+            } catch (e) { showAlert("Zip Failed: " + e.message); } finally { setProcessing(false); }
         }
 
         // ==========================================
@@ -1339,7 +1381,28 @@
             if(ui.toggleSelect) ui.toggleSelect.onclick = toggleSelectMode; 
             if(ui.cancelSelectBtn) ui.cancelSelectBtn.onclick = toggleSelectMode;
 
-            if(ui.backupBtn) ui.backupBtn.onclick = async () => { setProcessing(true); try { const blob = await createBackupBlob(); saveAs(blob, `Backup.json`); } catch(e){ showAlert("Backup Failed: "+e.message); } setProcessing(false); };
+            if(ui.backupBtn) ui.backupBtn.onclick = async () => { 
+                setProcessing(true); 
+                try { 
+                    const blob = await createBackupBlob(); 
+                    // Share Logic for Backup too
+                    const file = new File([blob], "backup.json", { type: "application/json" });
+                    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                        try {
+                            await navigator.share({
+                                files: [file],
+                                title: 'Field Cam Backup',
+                                text: 'Project Backup JSON'
+                            });
+                            return; 
+                        } catch (shareError) {
+                            if (shareError.name !== 'AbortError') console.warn("Share failed, fallback", shareError);
+                            else return;
+                        }
+                    }
+                    saveAs(blob, `Backup.json`); 
+                } catch(e){ showAlert("Backup Failed: "+e.message); } finally { setProcessing(false); }
+            };
             if(ui.emailBackupBtn) ui.emailBackupBtn.onclick = async () => {
                 if (!navigator.share || !navigator.canShare) return showAlert("Sharing not supported.");
                 setProcessing(true, "Preparing Email...");
