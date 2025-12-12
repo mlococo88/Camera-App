@@ -410,7 +410,17 @@
         import { getFirestore, collection, doc, setDoc, getDoc, deleteDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
 
         // --- CONFIG ---
-        // Ensure firebase config exists in environment
+        // Hardcoded Firebase Config for deployment portability
+        const HARDCODED_FIREBASE_CONFIG = {
+            apiKey: "AIzaSyD2jsJTjSlWf3SINS3u4fz3Lu5IYbI6N94",
+            authDomain: "field-cam.firebaseapp.com",
+            projectId: "field-cam",
+            storageBucket: "field-cam.firebasestorage.app",
+            messagingSenderId: "952385597528",
+            appId: "1:952385597528:web:3a5b2011a4cc2b29e41a2d",
+            measurementId: "G-99YLN372F9"
+        };
+
         let app, auth, db, user, unsubscribeNotes, unsubscribePhotos, unsubscribeProjects;
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-fieldcam';
 
@@ -420,7 +430,7 @@
         async function initFirebase() {
             let config = null;
 
-            // 1. Check Canvas environment config first
+            // 1. Check Canvas environment config first (Highest Priority)
             if(typeof __firebase_config !== 'undefined') {
                 try {
                     config = JSON.parse(__firebase_config);
@@ -429,19 +439,25 @@
                 }
             }
             
-            // 2. Check manually stored config (from a previous session on GitHub)
-            if (!config && localStorage.getItem('fc_firebase_config')) {
-                try {
-                    config = JSON.parse(localStorage.getItem('fc_firebase_config'));
-                    manualFirebaseConfig = config;
-                } catch (e) {
-                    console.error("Local Firebase config parsing failed:", e);
-                    localStorage.removeItem('fc_firebase_config');
-                }
+            // 2. Use Hardcoded Config (If Canvas config is missing, use hardcoded one for GitHub portability)
+            if (!config) {
+                config = HARDCODED_FIREBASE_CONFIG;
             }
 
-            // 3. If config is still missing, show the manual input modal (for GitHub deployment)
-            if (!config) {
+            // 3. Check for manually saved config override (from a previous session on GitHub)
+            if (localStorage.getItem('fc_firebase_config')) {
+                 try {
+                     config = JSON.parse(localStorage.getItem('fc_firebase_config'));
+                     manualFirebaseConfig = config;
+                 } catch (e) {
+                     console.error("Local Firebase config parsing failed:", e);
+                     localStorage.removeItem('fc_firebase_config');
+                 }
+            }
+
+
+            // 4. If config is still missing after all checks (should only happen if hardcoding failed or was deleted), show manual input modal
+            if (!config || !config.apiKey) {
                  console.warn("Firebase config missing. Prompting user for manual configuration.");
                  ui.configModal.classList.remove('hidden');
                  return; // Halt initialization until config is provided
@@ -527,7 +543,7 @@
             name: 'FieldCamDB', version: 3, 
             open: function() { return new Promise((res, rej) => { const req = indexedDB.open(this.name, this.version); req.onupgradeneeded = (e) => { const db = e.target.result; if (!db.objectStoreNames.contains('photos')) db.createObjectStore('photos', { keyPath: 'id' }); if (!db.objectStoreNames.contains('notes')) db.createObjectStore('notes', { keyPath: 'id' }); }; req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error); }); },
             add: async function(s, o) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readwrite'); tx.objectStore(s).put(o); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); },
-            getAll: async function(s) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readonly'); const req = tx.objectStore(s).getAll(); req.onsuccess = () => res(req.result); req.onerror = () => rej(tx.error); }); },
+            getAll: async function(s) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readonly'); const req = tx.objectStore(s).getAll(); req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error); }); },
             delete: async function(s, id) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readwrite'); tx.objectStore(s).delete(id); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); },
             clear: async function(s) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readwrite'); tx.objectStore(s).clear(); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); },
             get: async function(s, id) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readonly'); const req = tx.objectStore(s).get(id); req.onsuccess = () => res(req.result); req.onerror = () => rej(tx.error); }); }
@@ -1167,6 +1183,7 @@
         }
 
         async function createProject() {
+            if (!user) return showAlert("You must be logged in with a named account to create new projects.");
             const name = ui.newProjectInput.value.trim();
             if(!name) return;
             const projectId = name.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase() + '-' + Date.now().toString().slice(-4);
@@ -1257,7 +1274,16 @@
         async function handleLogin() {
             try {
                 ui.loginSubmit.textContent = "Logging in...";
-                await signInWithEmailAndPassword(auth, ui.loginEmail.value, ui.loginPass.value);
+                // Determine if this is a login or sign-up attempt based on whether we are trying to create an account
+                const isSignUp = ui.loginSubmit.dataset.mode === 'signup';
+                
+                if (isSignUp) {
+                    // This is where Firebase SDK handles both login and sign-up based on context
+                    await auth.createUserWithEmailAndPassword(auth, ui.loginEmail.value, ui.loginPass.value);
+                } else {
+                    await signInWithEmailAndPassword(auth, ui.loginEmail.value, ui.loginPass.value);
+                }
+
                 ui.loginModal.classList.add('hidden');
             } catch (error) {
                 ui.loginError.textContent = error.message; ui.loginError.classList.remove('hidden');
