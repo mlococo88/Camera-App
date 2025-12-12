@@ -488,6 +488,15 @@
                 // This listener fires immediately after the sign-in above completes OR when a persisted session is restored.
                 onAuthStateChanged(auth, (u) => {
                     user = u;
+                    
+                    // CRITICAL FIX: If no user is authenticated (meaning a new user, or a sign-out without anonymous fallback)
+                    // We must open the login modal and halt app load.
+                    if (!u) {
+                        setLoginMode('login');
+                        ui.loginModal.classList.remove('hidden');
+                        return; // Halt app execution until login/signup succeeds
+                    }
+
                     updateAuthUI();
                     if(u) {
                         fetchUserProjects(); // Load project list
@@ -526,7 +535,7 @@
             getAll: async function(s) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readonly'); const req = tx.objectStore(s).getAll(); req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error); }); },
             delete: async function(s, id) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readwrite'); tx.objectStore(s).delete(id); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); },
             clear: async function(s) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readwrite'); tx.objectStore(s).clear(); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); },
-            get: async function(s, id) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readonly'); const req = tx.objectStore(s).get(id); req.onsuccess = () => res(req.result); req.onerror = () => rej(tx.error); }); }
+            get: async function(s, id) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readonly'); const req = tx.objectStore(s).get(id); req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error); }); }
         };
 
         const state = { 
@@ -938,6 +947,7 @@
         function editNote(id) {
             const note = state.notes.find(n => n.id === id);
             if (!note) return;
+            state.editingNoteId = id;
             
             // Populate tags and note input
             document.getElementById('new-note-tags').value = (note.tags || []).join(', ');
