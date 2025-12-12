@@ -241,6 +241,8 @@
                 <div id="auth-status-container" class="mt-2 p-2 bg-gray-800 rounded border border-gray-700 hidden">
                      <p class="text-[10px] text-green-400 mb-1">Logged in as:</p>
                      <p id="user-email-display" class="text-xs font-bold text-white truncate mb-2">...</p>
+                     <!-- ADDED: Button to trigger manual email/password login -->
+                     <button id="login-manual-btn" class="w-full bg-blue-900/50 hover:bg-blue-800 text-blue-200 text-xs py-2 rounded border border-blue-800 hidden mb-2">Log In / Sign Up</button>
                      <button id="logout-btn" class="w-full bg-red-900/50 hover:bg-red-800 text-red-200 text-xs py-2 rounded border border-red-800">Sign Out</button>
                 </div>
 
@@ -488,6 +490,8 @@
             cloudBtn: document.getElementById('cloud-sync-btn'), cloudStatus: document.getElementById('cloud-icon-status'), cloudMsg: document.getElementById('cloud-status-msg'), sCloudEnable: document.getElementById('set-cloud-enable'),
             loginModal: document.getElementById('login-modal'), loginEmail: document.getElementById('login-email'), loginPass: document.getElementById('login-password'), loginSubmit: document.getElementById('login-submit-btn'), loginCancel: document.getElementById('login-cancel-btn'), loginError: document.getElementById('login-error'),
             authStatusContainer: document.getElementById('auth-status-container'), userEmailDisplay: document.getElementById('user-email-display'), logoutBtn: document.getElementById('logout-btn'),
+            // FIX: Added manual login button to UI references
+            loginManualBtn: document.getElementById('login-manual-btn'),
             // Project UI
             projectListContainer: document.getElementById('project-list-container'), projectList: document.getElementById('project-list'), manageProjectsBtn: document.getElementById('manage-projects-btn'), addProjectBtn: document.getElementById('add-project-btn'), newProjectInput: document.getElementById('new-project-input'), currentProjectLabel: document.getElementById('current-project-label'),
             // Core
@@ -1161,8 +1165,18 @@
             if(user) {
                 ui.authStatusContainer.classList.remove('hidden');
                 // The anonymous user email will show as null, so check for it
-                ui.userEmailDisplay.innerText = user.email || `User ID: ${user.uid.substring(0, 8)}...`;
+                ui.userEmailDisplay.innerText = user.email || `User ID: ${user.uid.substring(0, 8)}... (Anonymous)`;
                 ui.logoutBtn.classList.remove('hidden');
+
+                // FIX: Show manual login button if user is anonymous (no email means anonymous/token user)
+                if (user.email) {
+                    ui.loginManualBtn.classList.add('hidden');
+                    ui.logoutBtn.innerText = "Sign Out";
+                } else {
+                    ui.loginManualBtn.classList.remove('hidden');
+                    ui.logoutBtn.innerText = "Disable Cloud Sync (Local)";
+                }
+                
                 // Auto-check sync if user is logged in (even anon)
                 ui.sCloudEnable.checked = state.settings.cloudEnabled;
             } else {
@@ -1422,6 +1436,9 @@
             ui.loginSubmit.onclick = handleLogin;
             ui.loginCancel.onclick = () => ui.loginModal.classList.add('hidden');
             ui.logoutBtn.onclick = handleLogout;
+            // ADDED: Listener for the new manual login button
+            if (ui.loginManualBtn) ui.loginManualBtn.onclick = () => ui.loginModal.classList.remove('hidden');
+            
             ui.sCloudEnable.onchange = (e) => { 
                 if(e.target.checked) { 
                     state.settings.cloudEnabled = true; localStorage.setItem('fc_cloud', 'true'); 
