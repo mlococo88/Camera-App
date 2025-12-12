@@ -389,7 +389,7 @@
 
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js';
-        import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signInWithCustomToken, signOut } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
+        import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signInWithCustomToken, signOut, signInAnonymously } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
         import { getFirestore, collection, doc, setDoc, getDoc, deleteDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
 
         // --- CONFIG ---
@@ -407,11 +407,22 @@
                     auth = getAuth(app);
                     db = getFirestore(app);
 
-                    // Use custom token if available (environment), else user manually logs in via UI
+                    // FIX: Ensure authentication is completed (either custom token or anonymous)
+                    // before proceeding to Firestore operations via onAuthStateChanged.
                     if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                        await signInWithCustomToken(auth, __initial_auth_token);
-                    } 
+                        try {
+                            await signInWithCustomToken(auth, __initial_auth_token);
+                        } catch(e) {
+                             // Fallback to anonymous sign-in if custom token fails (e.g., expired or invalid)
+                            console.warn("Custom token sign-in failed, falling back to anonymous.", e);
+                            await signInAnonymously(auth);
+                        }
+                    } else {
+                        // FIX: Sign in anonymously if the custom token variable is missing or empty
+                        await signInAnonymously(auth);
+                    }
 
+                    // This listener fires immediately after the sign-in above completes.
                     onAuthStateChanged(auth, (u) => {
                         user = u;
                         updateAuthUI();
@@ -419,6 +430,7 @@
                             fetchUserProjects(); // Load project list
                             if(state.settings.cloudEnabled && state.settings.projectId) startCloudSync();
                         } else {
+                            // This branch handles explicit sign-out or session termination
                             updateCloudUI('off');
                             if(unsubscribeNotes) unsubscribeNotes();
                             if(unsubscribePhotos) unsubscribePhotos();
@@ -449,7 +461,7 @@
             getAll: async function(s) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readonly'); const req = tx.objectStore(s).getAll(); req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error); }); },
             delete: async function(s, id) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readwrite'); tx.objectStore(s).delete(id); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); },
             clear: async function(s) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readwrite'); tx.objectStore(s).clear(); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); },
-            get: async function(s, id) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readonly'); const req = tx.objectStore(s).get(id); req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error); }); }
+            get: async function(s, id) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readonly'); const req = tx.objectStore(s).get(id); req.onsuccess = () => res(req.result); req.onerror = () => rej(tx.error); }); }
         };
 
         const state = { 
@@ -1072,6 +1084,7 @@
         // --- Project Management Logic ---
         async function fetchUserProjects() {
             if(!user) return;
+            // Path: /artifacts/{appId}/users/{userId}/projects
             const ref = collection(db, 'artifacts', appId, 'users', user.uid, 'projects');
             unsubscribeProjects = onSnapshot(ref, (snap) => {
                 state.userProjects = [];
@@ -1084,6 +1097,7 @@
             const name = ui.newProjectInput.value.trim();
             if(!name) return;
             const projectId = name.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase() + '-' + Date.now().toString().slice(-4);
+             // Path: /artifacts/{appId}/users/{userId}/projects/{projectId}
             const ref = doc(db, 'artifacts', appId, 'users', user.uid, 'projects', projectId);
             await setDoc(ref, { name: name, created: Date.now() });
             ui.newProjectInput.value = '';
@@ -1146,9 +1160,11 @@
         function updateAuthUI() {
             if(user) {
                 ui.authStatusContainer.classList.remove('hidden');
-                ui.userEmailDisplay.innerText = user.email;
+                // The anonymous user email will show as null, so check for it
+                ui.userEmailDisplay.innerText = user.email || `User ID: ${user.uid.substring(0, 8)}...`;
                 ui.logoutBtn.classList.remove('hidden');
-                ui.sCloudEnable.checked = true; state.settings.cloudEnabled = true;
+                // Auto-check sync if user is logged in (even anon)
+                ui.sCloudEnable.checked = state.settings.cloudEnabled;
             } else {
                 ui.authStatusContainer.classList.add('hidden');
                 ui.logoutBtn.classList.add('hidden');
@@ -1165,8 +1181,9 @@
             } finally { ui.loginSubmit.textContent = "Log In"; }
         }
         async function handleLogout() {
-            await signOut(auth);
+            // Note: Cannot sign out the anonymous user provided by Canvas, but we can disable cloud sync locally.
             state.settings.cloudEnabled = false; ui.sCloudEnable.checked = false; localStorage.setItem('fc_cloud', 'false');
+            if(user.email) await signOut(auth); // Only sign out if they signed in with email/pass
         }
         function updateCloudUI(status) {
             ui.cloudStatus.className = 'absolute top-1 right-1 w-2 h-2 rounded-full border border-gray-700 ';
@@ -1193,6 +1210,7 @@
             updateCloudUI('sync');
             try {
                 const docId = `${state.settings.projectId}_${id}`;
+                // Path: /artifacts/{appId}/public/data/{collection}/{docId}
                 await setDoc(doc(db, 'artifacts', appId, 'public', 'data', col, docId), { ...data, _pid: state.settings.projectId, _uid: user.uid }, { merge: true });
                 updateCloudUI('on');
                 return true; // Return success
@@ -1252,6 +1270,7 @@
             // TRIGGER SYNC PENDING IMMEDIATELY
             syncPendingItems();
 
+            // Path: /artifacts/{appId}/public/data/shared_notes
             unsubscribeNotes = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'shared_notes'), (snap) => {
                 snap.docChanges().forEach(async (c) => {
                     if ((c.type === "added" || c.type === "modified") && c.doc.data()._pid === pid) {
@@ -1272,6 +1291,7 @@
                 });
             });
             
+            // Path: /artifacts/{appId}/public/data/shared_photos
             unsubscribePhotos = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'shared_photos'), (snap) => {
                 snap.docChanges().forEach(async (c) => {
                     if ((c.type === "added" || c.type === "modified") && c.doc.data()._pid === pid) {
@@ -1291,7 +1311,7 @@
                             // Only re-render if we are not currently editing this specific photo
                             if (state.editingId !== p.id) renderGallery();
                         } else if (d.preview_b64) {
-                            // ADD new photo
+                            // ADD new photo (downloading compressed preview)
                             const blob = await (await fetch(d.preview_b64)).blob();
                             const newP = { ...d, finalBlob: blob, displayUrl: URL.createObjectURL(blob), isCloudPreview: true, synced: true };
                             // Check if duplicate before adding
@@ -1402,7 +1422,14 @@
             ui.loginSubmit.onclick = handleLogin;
             ui.loginCancel.onclick = () => ui.loginModal.classList.add('hidden');
             ui.logoutBtn.onclick = handleLogout;
-            ui.sCloudEnable.onchange = (e) => { if(e.target.checked && !user) { e.target.checked=false; ui.loginModal.classList.remove('hidden'); } else if (!e.target.checked) handleLogout(); };
+            ui.sCloudEnable.onchange = (e) => { 
+                if(e.target.checked) { 
+                    state.settings.cloudEnabled = true; localStorage.setItem('fc_cloud', 'true'); 
+                    if(user) startCloudSync();
+                } else { 
+                    handleLogout(); // Disables cloud sync locally
+                } 
+            };
 
             ui.snapBtn.onclick = () => ui.nativeInput.click();
             ui.nativeInput.onchange = (e) => { if(e.target.files[0]) handleCapturedBlob(e.target.files[0]); };
