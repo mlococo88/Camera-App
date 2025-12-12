@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Field Cam">
-    <title>Field Cam Pro (Fixed)</title>
+    <title>Field Cam Pro (Cloud Sync)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -60,10 +60,6 @@
         .cloud-error { background-color: #ef4444; }
         .cloud-syncing { background-color: #eab308; animation: pulse 1s infinite; }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-
-        /* Pending Upload Badge */
-        .pending-badge { position: absolute; bottom: 4px; right: 4px; background: rgba(0,0,0,0.6); padding: 2px; border-radius: 4px; }
-        .pending-icon { width: 12px; height: 12px; color: #fbbf24; }
 
         .custom-modal-overlay { background: rgba(0,0,0,0.85); backdrop-filter: blur(4px); }
         .animate-fade-in { animation: fadeIn 0.2s ease-out; }
@@ -121,12 +117,6 @@
                 </button>
             </div>
             <input type="file" id="native-cam-input" accept="image/*" capture="environment" class="hidden">
-            <!-- Placeholders for code compatibility -->
-            <video id="video" class="hidden"></video>
-            <div id="native-mode-placeholder" class="hidden"></div>
-            <button id="torch-btn" class="hidden"></button>
-            <canvas id="canvas" class="hidden"></canvas>
-            <div id="flash-element" class="flash-overlay"></div>
         </div>
 
         <div id="gallery-panel" class="w-full h-[70%] md:h-full md:w-[400px] bg-gray-900 flex flex-col md:border-l shadow-2xl z-20">
@@ -372,11 +362,12 @@
 
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js';
-        import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signInWithCustomToken, signOut, signInAnonymously } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
+        import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signInWithCustomToken, signInAnonymously, signOut } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
         import { getFirestore, collection, doc, setDoc, getDoc, deleteDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
 
         // --- CONFIG ---
-        const YOUR_FIREBASE_CONFIG = { apiKey: "AIzaSyD2jsJTjSlWf3SINS3u4fz3Lu5IYbI6N94", authDomain: "field-cam.firebaseapp.com", projectId: "field-cam", storageBucket: "field-cam.firebasestorage.app", messagingSenderId: "952385597528", appId: "1:952385597528:web:3a5b2011a4cc2b29e41a2d", measurementId: "G-99YLN372F9" };
+        // Your specific config as fallback
+        const USER_PROVIDED_CONFIG = { apiKey: "AIzaSyD2jsJTjSlWf3SINS3u4fz3Lu5IYbI6N94", authDomain: "field-cam.firebaseapp.com", projectId: "field-cam", storageBucket: "field-cam.firebasestorage.app", messagingSenderId: "952385597528", appId: "1:952385597528:web:3a5b2011a4cc2b29e41a2d", measurementId: "G-99YLN372F9" };
         
         // --- Firebase Init ---
         let app, auth, db, user, unsubscribeNotes, unsubscribePhotos, unsubscribeProjects;
@@ -385,37 +376,31 @@
         async function initFirebase() {
             try {
                 let config = null;
-                if(typeof __firebase_config !== 'undefined') {
+                // Prioritize environment config if available
+                if (typeof __firebase_config !== 'undefined' && __firebase_config) {
                     config = JSON.parse(__firebase_config);
                 } else {
-                    config = YOUR_FIREBASE_CONFIG;
+                    config = USER_PROVIDED_CONFIG;
                 }
                 
                 app = initializeApp(config);
                 auth = getAuth(app);
                 db = getFirestore(app);
 
-                // Use custom token if available (environment), else user manually logs in via UI
-                const initAuth = async () => {
-                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                        await signInWithCustomToken(auth, __initial_auth_token);
-                    } else {
-                        // Fallback to anonymous only if no explicit manual login is expected initially
-                        // But for this specific app, we want to allow manual login for cloud sync.
-                        // We will just wait for auth state change.
-                        // However, per prompt strict rules, we must auth first.
-                        // We'll sign in anonymously to ensure DB access works, then let user upgrade/switch via UI if needed.
-                         await signInAnonymously(auth);
-                    }
-                };
-                await initAuth();
+                // Auth flow: Check environment token first, then fallback to anonymous or email/pass
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else if (typeof __firebase_config !== 'undefined') {
+                    // In preview environment, default to anonymous
+                    await signInAnonymously(auth);
+                }
+                // If local (no env vars), we wait for user to login via UI
 
                 onAuthStateChanged(auth, (u) => {
                     user = u;
                     updateAuthUI();
                     if(u) {
                         fetchUserProjects(); // Load project list
-                        // Only start sync if explicitly enabled in settings, otherwise we are just authenticated for potential future sync
                         if(state.settings.cloudEnabled && state.settings.projectId) startCloudSync();
                     } else {
                         updateCloudUI('off');
@@ -453,7 +438,10 @@
             seriesMode: false, currentSeriesIds: new Set(), seriesCaptions: null, searchQuery: "", filterStart: null, filterEnd: null,
             userProjects: [],
             editingNoteId: null, // Track which note is being edited
+            editingId: null, // Track which photo is being edited
             lastWeatherFetch: 0, // Cache timestamp
+            mapInstance: null, mapMarkersGroup: null,
+            weather: "",
             settings: {
                 projectId: localStorage.getItem('fc_pid') || "default-project", // Default ID
                 cloudEnabled: localStorage.getItem('fc_cloud') === 'true',
@@ -495,421 +483,7 @@
             downloadProjectBtn: document.getElementById('download-project-btn'), backupBtn: document.getElementById('backup-btn')
         };
         
-        // --- MISSING FUNCTIONS IMPLEMENTATION ---
-        
-        async function saveNote() {
-            const text = ui.newNoteInput.value.trim();
-            if (!text) return;
-            
-            if (state.editingNoteId) {
-                // Edit mode
-                const note = state.notes.find(n => n.id === state.editingNoteId);
-                if (note) {
-                    note.text = text;
-                    note.synced = false; // Mark for resync
-                    await DB.add('notes', note);
-                    state.editingNoteId = null;
-                    ui.addNoteBtn.innerText = "Add Note";
-                    ui.cancelNoteEditBtn.classList.add('hidden');
-                }
-            } else {
-                // New note
-                const note = {
-                    id: Date.now(),
-                    text: text,
-                    timestamp: new Date().toLocaleString(),
-                    location: state.currentLocation,
-                    projectId: state.settings.projectId,
-                    synced: false
-                };
-                state.notes.unshift(note);
-                await DB.add('notes', note);
-            }
-            ui.newNoteInput.value = '';
-            renderNotes();
-            
-            if (state.settings.cloudEnabled) syncPendingItems();
-        }
-
-        function renderNotes() {
-            ui.notesList.innerHTML = '';
-            const filtered = state.notes.filter(n => n.projectId === state.settings.projectId);
-            
-            if (filtered.length === 0) {
-                ui.notesList.innerHTML = '<div id="notes-placeholder" class="text-center text-gray-500 mt-10 text-sm">No notes recorded yet.</div>';
-                return;
-            }
-
-            filtered.forEach(note => {
-                const div = document.createElement('div');
-                div.className = "bg-gray-800 p-3 rounded-lg border border-gray-700 shadow-sm";
-                div.innerHTML = `
-                    <div class="flex justify-between items-start mb-2">
-                        <span class="text-xs text-blue-400 font-mono">${note.timestamp}</span>
-                        <div class="flex gap-2">
-                            <button onclick="window.editNote(${note.id})" class="text-gray-400 hover:text-white"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg></button>
-                            <button onclick="window.deleteNote(${note.id})" class="text-gray-400 hover:text-red-400"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
-                        </div>
-                    </div>
-                    <p class="text-sm text-gray-200 whitespace-pre-wrap">${note.text}</p>
-                    <div class="mt-2 text-[10px] text-gray-500 flex items-center gap-1">
-                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-                        ${note.location || "No Location"}
-                    </div>
-                `;
-                ui.notesList.appendChild(div);
-            });
-        }
-
-        function renderGallery() {
-            const container = ui.gallery;
-            container.innerHTML = '';
-            
-            // Filter
-            let filtered = state.photos.filter(p => p.projectId === state.settings.projectId);
-            if (state.searchQuery) {
-                const q = state.searchQuery;
-                filtered = filtered.filter(p => 
-                    (p.captions.c1 && p.captions.c1.toLowerCase().includes(q)) ||
-                    (p.captions.c2 && p.captions.c2.toLowerCase().includes(q)) ||
-                    (p.captions.c3 && p.captions.c3.toLowerCase().includes(q)) ||
-                    (p.metaNote && p.metaNote.toLowerCase().includes(q))
-                );
-            }
-            if (state.filterStart) {
-                const start = new Date(state.filterStart).setHours(0,0,0,0);
-                filtered = filtered.filter(p => new Date(p.timestamp).getTime() >= start);
-            }
-            if (state.filterEnd) {
-                const end = new Date(state.filterEnd).setHours(23,59,59,999);
-                filtered = filtered.filter(p => new Date(p.timestamp).getTime() <= end);
-            }
-            
-            ui.galleryCount.innerText = filtered.length;
-            
-            if (filtered.length === 0) {
-                container.innerHTML = '<div id="gallery-placeholder" class="col-span-full flex flex-col items-center justify-center text-gray-500 mt-10 space-y-2"><p class="text-xs">No photos found</p></div>';
-                return;
-            }
-
-            // Sort Descending
-            filtered.sort((a,b) => b.id - a.id);
-
-            filtered.forEach(p => {
-                const div = document.createElement('div');
-                div.className = `grid-item-aspect bg-gray-800 rounded overflow-hidden cursor-pointer relative ${state.selectedIds.has(p.id) ? 'selected-item' : ''}`;
-                
-                // Construct Thumbnail source
-                let src = p.displayUrl;
-                if (!src && p.preview_b64) src = p.preview_b64;
-                if (!src) src = ""; // Placeholder?
-
-                div.onclick = () => handlePhotoClick(p);
-
-                div.innerHTML = `
-                    <img src="${src}" loading="lazy" class="w-full h-full object-cover">
-                    <div class="absolute inset-0 select-ring pointer-events-none"></div>
-                    <div class="selection-check"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg></div>
-                    ${!p.synced && state.settings.cloudEnabled ? '<div class="pending-badge"><svg class="pending-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg></div>' : ''}
-                    <div class="absolute bottom-0 left-0 right-0 bg-black/60 p-1 truncate text-[8px] text-white text-center font-mono">#${p.photoNumber}</div>
-                `;
-                container.appendChild(div);
-            });
-        }
-
-        function handlePhotoClick(photo) {
-            if (ui.toggleSelect.classList.contains('bg-indigo-600')) {
-                // Select Mode
-                if (state.selectedIds.has(photo.id)) state.selectedIds.delete(photo.id);
-                else state.selectedIds.add(photo.id);
-                ui.selectionCount.innerText = `${state.selectedIds.size} Selected`;
-                renderGallery();
-            } else {
-                // Preview Mode
-                state.editingId = photo.id;
-                let src = photo.displayUrl || photo.preview_b64;
-                ui.previewImg.src = src;
-                ui.inputs.c1.value = photo.captions.c1 || "";
-                ui.inputs.c2.value = photo.captions.c2 || "";
-                ui.inputs.c3.value = photo.captions.c3 || "";
-                ui.inputs.meta.value = photo.metaNote || "";
-                ui.previewModal.classList.remove('hidden');
-            }
-        }
-
-        function handleCapturedBlob(file) {
-            if (!file) return;
-            setProcessing(true, "Processing Image...");
-            
-            const reader = new FileReader();
-            reader.onload = async (e) => {
-                const arrayBuffer = e.target.result;
-                const blob = new Blob([arrayBuffer], {type: file.type});
-                
-                // Generate ID and Num
-                const id = Date.now();
-                const num = state.settings.nextNum;
-                
-                // Create Photo Object
-                const newPhoto = {
-                    id: id,
-                    photoNumber: num,
-                    timestamp: new Date().toLocaleString(),
-                    projectId: state.settings.projectId,
-                    captions: {
-                        c1: state.settings.defC1,
-                        c2: state.settings.defC2,
-                        c3: state.settings.defC3
-                    },
-                    metaNote: "",
-                    lat: state.currentLat,
-                    lon: state.currentLon,
-                    compass: document.getElementById('compass-text').innerText,
-                    weather: state.weather,
-                    originalBlob: blob,
-                    synced: false
-                };
-
-                // Burn-in Visuals
-                await processPhotoVisuals(newPhoto);
-
-                // Add to State & DB
-                state.photos.unshift(newPhoto);
-                await DB.add('photos', await prepPhotoForSave(newPhoto));
-                
-                // Increment Counter
-                state.settings.nextNum++;
-                localStorage.setItem('fc_num', state.settings.nextNum);
-                
-                // Cleanup
-                renderGallery();
-                setProcessing(false);
-                ui.nativeInput.value = ''; // Reset input
-                
-                if (state.settings.cloudEnabled) syncPendingItems();
-            };
-            reader.readAsArrayBuffer(file);
-        }
-
-        async function processPhotoVisuals(photo) {
-            const img = await createImageFromBlob(photo.originalBlob || new Blob([photo.finalBuffer]));
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            
-            // Set resolution based on settings or default to original
-            // Simplification: Use original resolution for "max", or scale down
-            canvas.width = img.width;
-            canvas.height = img.height;
-            
-            ctx.drawImage(img, 0, 0);
-
-            if (state.settings.burnIn) {
-                // Settings
-                const fontSize = (canvas.height * (state.settings.fontScale / 1000)); 
-                const padding = fontSize / 2;
-                const lineHeight = fontSize * 1.2;
-                
-                ctx.font = `bold ${fontSize}px sans-serif`;
-                ctx.textBaseline = 'bottom';
-                
-                const texts = [];
-                texts.push(state.settings.reportTitle);
-                texts.push(`Project: ${state.settings.projectId}`);
-                if (photo.timestamp) texts.push(photo.timestamp);
-                if (photo.lat && photo.lon) texts.push(`GPS: ${photo.lat.toFixed(5)}, ${photo.lon.toFixed(5)}`);
-                if (photo.captions.c1) texts.push(photo.captions.c1);
-                if (photo.captions.c2) texts.push(photo.captions.c2);
-                if (photo.captions.c3) texts.push(photo.captions.c3);
-                
-                // Draw Bottom Overlay
-                const totalHeight = (texts.length * lineHeight) + padding * 2;
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-                ctx.fillRect(0, canvas.height - totalHeight, canvas.width, totalHeight);
-                
-                ctx.fillStyle = 'white';
-                let y = canvas.height - padding - (lineHeight * 0.3); // Slight adjustment
-                
-                // Draw text from bottom up
-                for (let i = texts.length - 1; i >= 0; i--) {
-                    ctx.fillText(texts[i], padding, y);
-                    y -= lineHeight;
-                }
-                
-                // Compass / Weather Top Right
-                const topText = [];
-                if (photo.compass && photo.compass !== "--°") topText.push(`Dir: ${photo.compass}`);
-                if (photo.weather) topText.push(photo.weather);
-                
-                if (topText.length > 0) {
-                     ctx.textAlign = 'right';
-                     ctx.textBaseline = 'top';
-                     const topBlockHeight = (topText.length * lineHeight) + padding;
-                     ctx.fillStyle = 'rgba(0,0,0,0.4)';
-                     ctx.fillRect(canvas.width - 400, 0, 400, topBlockHeight); // Approx width
-                     
-                     ctx.fillStyle = 'yellow';
-                     let ty = padding;
-                     topText.forEach(t => {
-                         ctx.fillText(t, canvas.width - padding, ty);
-                         ty += lineHeight;
-                     });
-                }
-            }
-
-            // Export to Blob
-            return new Promise(resolve => {
-                canvas.toBlob(blob => {
-                    photo.finalBlob = blob;
-                    photo.displayUrl = URL.createObjectURL(blob);
-                    resolve();
-                }, 'image/jpeg', state.settings.jpegQ);
-            });
-        }
-
-        async function restoreSession() {
-            try {
-                const photos = await DB.getAll('photos');
-                const notes = await DB.getAll('notes');
-                
-                // Hydrate URLs for display
-                for (let p of photos) {
-                    if (p.finalBuffer) {
-                        const blob = new Blob([p.finalBuffer], {type:'image/jpeg'});
-                        p.displayUrl = URL.createObjectURL(blob);
-                        p.finalBlob = blob; // Restore blob for operations
-                    }
-                }
-                
-                state.photos = photos;
-                state.notes = notes;
-                
-                renderGallery();
-                renderNotes();
-                if(state.settings.projectId) updateProjectUI(state.settings.projectId);
-            } catch (e) {
-                console.error("Restore session failed", e);
-            }
-        }
-        
-        function loadSettingsUI() {
-            const s = state.settings;
-            ui.sCloudEnable.checked = s.cloudEnabled;
-            document.getElementById('set-proj-id').value = s.projectId;
-            ui.sAuth.value = s.author;
-            ui.sNum.value = s.nextNum;
-            ui.sC1.value = s.defC1;
-            ui.sC2.value = s.defC2;
-            ui.sC3.value = s.defC3;
-            ui.sBurn.checked = s.burnIn;
-            ui.sFont.value = s.fontScale;
-            ui.sComp.checked = s.compassUi;
-            ui.sPlay.value = s.pdfLayout;
-            ui.sPres.value = s.pdfRes;
-            ui.sImap.checked = s.incMap;
-            ui.sInotes.checked = s.incNotes;
-            document.getElementById('set-report-title').value = s.reportTitle;
-            document.getElementById('set-gps-fmt').value = s.gpsFmt;
-            
-            if (s.tempUnit === 'C') {
-                ui.sUnitC.classList.add('bg-blue-600', 'text-white'); ui.sUnitF.classList.remove('bg-blue-600', 'text-white');
-            } else {
-                ui.sUnitF.classList.add('bg-blue-600', 'text-white'); ui.sUnitC.classList.remove('bg-blue-600', 'text-white');
-            }
-            
-            // Logo
-            if (s.logo) {
-                ui.sLogoPreview.src = s.logo;
-                ui.sLogoPreview.classList.remove('hidden');
-                ui.sLogoPlaceholder.classList.add('hidden');
-                ui.sClearLogoBtn.classList.remove('hidden');
-            } else {
-                ui.sLogoPreview.classList.add('hidden');
-                ui.sLogoPlaceholder.classList.remove('hidden');
-                ui.sClearLogoBtn.classList.add('hidden');
-            }
-        }
-
-        async function saveSettingsUI() {
-            const s = state.settings;
-            s.cloudEnabled = ui.sCloudEnable.checked;
-            s.projectId = document.getElementById('set-proj-id').value || "default-project";
-            s.author = ui.sAuth.value;
-            s.nextNum = parseInt(ui.sNum.value) || 1;
-            s.defC1 = ui.sC1.value;
-            s.defC2 = ui.sC2.value;
-            s.defC3 = ui.sC3.value;
-            s.burnIn = ui.sBurn.checked;
-            s.fontScale = parseInt(ui.sFont.value);
-            s.compassUi = ui.sComp.checked;
-            s.pdfLayout = parseInt(ui.sPlay.value);
-            s.pdfRes = parseInt(ui.sPres.value);
-            s.incMap = ui.sImap.checked;
-            s.incNotes = ui.sInotes.checked;
-            s.reportTitle = document.getElementById('set-report-title').value;
-            s.gpsFmt = document.getElementById('set-gps-fmt').value;
-            
-            // Handle logo file input
-            const file = ui.sLogoInput.files[0];
-            if (file) {
-                 const reader = new FileReader();
-                 reader.onload = (e) => { s.logo = e.target.result; localStorage.setItem('fc_logo', s.logo); };
-                 reader.readAsDataURL(file);
-            }
-
-            // Persist primitive values
-            localStorage.setItem('fc_pid', s.projectId);
-            localStorage.setItem('fc_cloud', s.cloudEnabled);
-            localStorage.setItem('fc_auth', s.author);
-            localStorage.setItem('fc_num', s.nextNum);
-            localStorage.setItem('fc_c1', s.defC1);
-            localStorage.setItem('fc_c2', s.defC2);
-            localStorage.setItem('fc_c3', s.defC3);
-            localStorage.setItem('fc_burn', s.burnIn);
-            localStorage.setItem('fc_font', s.fontScale);
-            localStorage.setItem('fc_rt', s.reportTitle);
-            
-            ui.projectModal.classList.add('hidden');
-            renderGallery(); // Re-filter if project ID changed
-            if (s.cloudEnabled && user) startCloudSync();
-        }
-
-        function generatePDFReport() {
-            const validPhotos = state.photos.filter(p => p.projectId === state.settings.projectId);
-            const validNotes = state.notes.filter(n => n.projectId === state.settings.projectId);
-            
-            if (validPhotos.length === 0 && validNotes.length === 0) return showAlert("No data to report.");
-            
-            setProcessing(true, "Generating PDF...");
-            setTimeout(async () => {
-                try {
-                    const doc = await createPDFDoc(validPhotos, validNotes);
-                    doc.save(`${state.settings.reportTitle.replace(/\s+/g, '_')}.pdf`);
-                } catch (e) {
-                    console.error(e);
-                    showAlert("PDF Generation Failed");
-                } finally {
-                    setProcessing(false);
-                }
-            }, 100);
-        }
-
-        function generateMapHTML(photos) {
-            const markers = photos.filter(p => p.lat && p.lon).map(p => 
-                `L.marker([${p.lat}, ${p.lon}]).addTo(map).bindPopup('<b>#${p.photoNumber}</b><br>${p.timestamp}');`
-            ).join("\n");
-            
-            return `<!DOCTYPE html><html><head><title>Project Map</title>
-            <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-            <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>
-            <style>body{margin:0;height:100vh}#map{height:100%}</style></head><body><div id="map"></div>
-            <script>
-            const map = L.map('map').setView([${photos[0]?.lat||0}, ${photos[0]?.lon||0}], 13);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-            ${markers}
-            <\/script></body></html>`;
-        }
-
-        // --- GLOBAL HELPER FUNCTIONS (Defined before setupEventListeners) ---
+        // --- GLOBAL HELPER FUNCTIONS ---
         function editNote(id) {
             const note = state.notes.find(n => n.id === id);
             if (!note) return;
@@ -934,23 +508,408 @@
             ui.cancelNoteEditBtn.classList.add('hidden');
         }
 
+        async function saveNote() {
+            const text = ui.newNoteInput.value.trim(); 
+            if (!text) return;
+
+            if (state.editingNoteId) {
+                // UPDATE EXISTING
+                const note = state.notes.find(n => n.id === state.editingNoteId);
+                if (note) {
+                    note.text = text;
+                    note.synced = false; // Mark for re-sync
+                    
+                    // Update in Arrays/DB
+                    await DB.add('notes', note);
+                    
+                    // Try cloud update
+                    if(state.settings.cloudEnabled && user) {
+                        const success = await uploadToCloud('shared_notes', note.id, { ...note, synced: true });
+                        if(success) {
+                            note.synced = true;
+                            await DB.add('notes', note);
+                        }
+                    }
+                    
+                    renderNotes();
+                    resetNoteInput(); // Clear UI
+                }
+            } else {
+                // CREATE NEW
+                const note = { 
+                    id: Date.now(), 
+                    text: text, 
+                    timestamp: new Date().toLocaleString(), 
+                    location: state.currentLocation || "No GPS", // Fallback just in case
+                    projectId: state.settings.projectId, 
+                    synced: false 
+                };
+                
+                // 1. Save Locally FIRST
+                await DB.add('notes', note); 
+                state.notes.unshift(note); 
+                renderNotes(); 
+                ui.newNoteInput.value = '';
+    
+                // 2. Try upload immediately
+                if(state.settings.cloudEnabled && user) {
+                     const success = await uploadToCloud('shared_notes', note.id, { ...note, synced: true });
+                     if(success) {
+                         note.synced = true;
+                         await DB.add('notes', note);
+                     }
+                }
+            }
+        }
+
+        // --- RESTORE SESSION ---
+        async function restoreSession() {
+            try {
+                // 1. Load Notes
+                state.notes = await DB.getAll('notes') || [];
+                // Filter for current project if needed, though usually we load all
+                // but filter visually.
+                state.notes = state.notes.sort((a,b) => b.id - a.id);
+                renderNotes();
+
+                // 2. Load Photos
+                state.photos = await DB.getAll('photos') || [];
+                state.photos = state.photos.filter(p => p.projectId === state.settings.projectId);
+                state.photos.sort((a,b) => b.id - a.id);
+                
+                // Regenerate URLs for blobs to display them
+                for (const p of state.photos) {
+                    if (p.finalBlob) p.displayUrl = URL.createObjectURL(p.finalBlob);
+                    else if (p.finalBuffer) {
+                        const b = new Blob([p.finalBuffer], {type:'image/jpeg'});
+                        p.finalBlob = b;
+                        p.displayUrl = URL.createObjectURL(b);
+                    }
+                }
+
+                ui.galleryCount.innerText = state.photos.length;
+                renderGallery();
+                
+            } catch (e) {
+                console.error("Failed to restore session", e);
+            }
+        }
+
+        // --- CORE PHOTO LOGIC (RECONSTRUCTED) ---
+        
+        async function handleCapturedBlob(file) {
+            setProcessing(true, "Processing Photo...");
+            try {
+                const photoId = Date.now();
+                
+                // Basic Metadata
+                const photoObj = {
+                    id: photoId,
+                    projectId: state.settings.projectId,
+                    timestamp: new Date().toLocaleString(),
+                    lat: state.currentLat,
+                    lon: state.currentLon,
+                    weather: state.weather || "N/A",
+                    compass: ui.compassText.innerText || "N/A",
+                    photoNumber: state.settings.nextNum,
+                    captions: {
+                        c1: state.settings.defC1,
+                        c2: state.settings.defC2,
+                        c3: state.settings.defC3
+                    },
+                    metaNote: "",
+                    originalBlob: file, // Keep original for re-processing if needed
+                    synced: false
+                };
+
+                // Increment Counter
+                state.settings.nextNum++;
+                localStorage.setItem('fc_num', state.settings.nextNum);
+                ui.sNum.value = state.settings.nextNum;
+
+                // Process Visuals (Burn-in)
+                await processPhotoVisuals(photoObj);
+
+                // Add to State & DB
+                state.photos.unshift(photoObj);
+                await DB.add('photos', await prepPhotoForSave(photoObj));
+
+                // Add to Series if active
+                if(state.seriesMode) {
+                    state.currentSeriesIds.add(photoId);
+                }
+
+                // Render
+                renderGallery();
+
+                // Upload if Online
+                if(state.settings.cloudEnabled && user) {
+                    syncPendingItems();
+                }
+
+            } catch(e) {
+                console.error(e);
+                showAlert("Error processing photo: " + e.message);
+            } finally {
+                setProcessing(false);
+                // Clear input to allow re-selecting same file
+                ui.nativeInput.value = '';
+            }
+        }
+
+        async function processPhotoVisuals(photoObj) {
+            // Load original image
+            const img = await createImageFromBlob(photoObj.originalBlob);
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+
+            canvas.width = img.width;
+            canvas.height = img.height;
+            
+            // Draw Base Image
+            ctx.drawImage(img, 0, 0);
+
+            // Burn In Logic
+            if (state.settings.burnIn) {
+                const fontSize = Math.max(24, Math.floor(canvas.height / state.settings.fontScale));
+                ctx.font = `bold ${fontSize}px Arial`;
+                ctx.fillStyle = "white";
+                ctx.shadowColor = "black";
+                ctx.shadowBlur = 4;
+                ctx.shadowOffsetX = 2;
+                ctx.shadowOffsetY = 2;
+
+                const pad = fontSize;
+                const lineHeight = fontSize * 1.2;
+
+                // Bottom Left: Date, Project, Location
+                let y = canvas.height - pad;
+                ctx.textAlign = "left";
+                ctx.fillText(photoObj.timestamp, pad, y);
+                y -= lineHeight;
+                if(photoObj.projectId) { ctx.fillText(`Project: ${photoObj.projectId}`, pad, y); y -= lineHeight; }
+                if(photoObj.lat && photoObj.lon) { ctx.fillText(`Loc: ${photoObj.lat.toFixed(5)}, ${photoObj.lon.toFixed(5)}`, pad, y); }
+
+                // Bottom Right: User Captions
+                y = canvas.height - pad;
+                ctx.textAlign = "right";
+                const rightX = canvas.width - pad;
+                
+                const caps = [photoObj.captions.c3, photoObj.captions.c2, photoObj.captions.c1].filter(Boolean);
+                caps.forEach(c => {
+                   ctx.fillText(c, rightX, y);
+                   y -= lineHeight;
+                });
+                
+                // Top Right: Compass/Weather
+                ctx.textAlign = "right";
+                let topY = pad + lineHeight;
+                if(photoObj.compass && photoObj.compass !== "N/A" && photoObj.compass !== "--°") {
+                     ctx.fillText(photoObj.compass, rightX, topY);
+                     topY += lineHeight;
+                }
+                if(photoObj.weather && photoObj.weather !== "N/A") {
+                     ctx.fillText(photoObj.weather, rightX, topY);
+                }
+            }
+
+            // Export to Blob
+            return new Promise(resolve => {
+                canvas.toBlob(blob => {
+                    photoObj.finalBlob = blob;
+                    photoObj.displayUrl = URL.createObjectURL(blob); // For UI
+                    resolve();
+                }, 'image/jpeg', 0.9);
+            });
+        }
+
+        function renderGallery() {
+            ui.gallery.innerHTML = '';
+            
+            // Filtering
+            let displayPhotos = state.photos;
+            
+            // Text Filter
+            if(state.searchQuery) {
+                const q = state.searchQuery;
+                displayPhotos = displayPhotos.filter(p => 
+                    (p.captions.c1 && p.captions.c1.toLowerCase().includes(q)) ||
+                    (p.captions.c2 && p.captions.c2.toLowerCase().includes(q)) ||
+                    (p.captions.c3 && p.captions.c3.toLowerCase().includes(q)) ||
+                    (p.metaNote && p.metaNote.toLowerCase().includes(q))
+                );
+            }
+
+            // Date Filter
+            if(state.filterStart) {
+                const s = new Date(state.filterStart).getTime();
+                displayPhotos = displayPhotos.filter(p => new Date(p.timestamp).getTime() >= s);
+            }
+            if(state.filterEnd) {
+                 // End of day
+                const e = new Date(state.filterEnd).getTime() + 86400000;
+                displayPhotos = displayPhotos.filter(p => new Date(p.timestamp).getTime() <= e);
+            }
+
+            if (displayPhotos.length === 0) {
+                ui.gallery.innerHTML = `<div class="col-span-full flex flex-col items-center justify-center text-gray-500 mt-10 space-y-2"><p class="text-xs">No photos found</p></div>`;
+                ui.galleryCount.innerText = "0";
+                return;
+            }
+
+            ui.galleryCount.innerText = displayPhotos.length;
+
+            displayPhotos.forEach(p => {
+                const div = document.createElement('div');
+                div.className = `grid-item-aspect bg-gray-800 rounded overflow-hidden cursor-pointer ${state.selectedIds.has(p.id) ? 'selected-item' : ''} ${state.currentSeriesIds.has(p.id) ? 'series-active-item' : ''}`;
+                
+                // Status dots
+                let statusDot = '';
+                if(!p.synced && state.settings.cloudEnabled) statusDot = `<div class="absolute top-1 left-1 w-2 h-2 rounded-full bg-yellow-400 border border-black z-10"></div>`;
+                
+                div.innerHTML = `
+                    <img src="${p.displayUrl}" loading="lazy">
+                    <div class="absolute inset-0 select-ring z-10"></div>
+                    ${statusDot}
+                    <div class="selection-check z-20"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" /></svg></div>
+                    <div class="absolute bottom-0 left-0 right-0 bg-black/60 p-1 truncate text-[10px] text-white z-10 text-center">#${p.photoNumber}</div>
+                `;
+
+                div.onclick = () => {
+                    if (ui.toggleSelect.classList.contains('bg-indigo-600') || state.seriesMode) {
+                        // Select Mode
+                        if (state.selectedIds.has(p.id)) {
+                            state.selectedIds.delete(p.id);
+                            div.classList.remove('selected-item');
+                        } else {
+                            state.selectedIds.add(p.id);
+                            div.classList.add('selected-item');
+                        }
+                        ui.selectionCount.innerText = `${state.selectedIds.size} Selected`;
+                    } else {
+                        // Preview Mode
+                        openPreview(p);
+                    }
+                };
+                ui.gallery.appendChild(div);
+            });
+        }
+
+        function renderNotes() {
+            const list = ui.notesList;
+            list.innerHTML = '';
+            
+            const relevantNotes = state.notes.filter(n => n.projectId === state.settings.projectId);
+            
+            if(relevantNotes.length === 0) {
+                list.innerHTML = `<div id="notes-placeholder" class="text-center text-gray-500 mt-10 text-sm">No notes recorded yet.</div>`;
+                return;
+            }
+
+            relevantNotes.forEach(n => {
+                const div = document.createElement('div');
+                div.className = "bg-gray-800 p-3 rounded border border-gray-700 flex flex-col gap-1";
+                div.innerHTML = `
+                    <div class="flex justify-between items-start">
+                        <span class="text-[10px] text-gray-400 font-mono">${n.timestamp}</span>
+                        <div class="flex gap-2">
+                             ${!n.synced && state.settings.cloudEnabled ? '<span class="text-[8px] bg-yellow-600 px-1 rounded text-white">Pending</span>' : ''}
+                             <button class="text-blue-400 hover:text-white" onclick="window.editNote(${n.id})">Edit</button>
+                             <button class="text-red-400 hover:text-white" onclick="window.deleteNote(${n.id})">&times;</button>
+                        </div>
+                    </div>
+                    <p class="text-sm text-gray-200 whitespace-pre-wrap">${n.text}</p>
+                    <div class="text-[10px] text-gray-500 flex items-center gap-1"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>${n.location}</div>
+                `;
+                list.appendChild(div);
+            });
+        }
+
+        function openPreview(p) {
+            state.editingId = p.id;
+            ui.previewImg.src = p.displayUrl;
+            ui.inputs.c1.value = p.captions.c1 || "";
+            ui.inputs.c2.value = p.captions.c2 || "";
+            ui.inputs.c3.value = p.captions.c3 || "";
+            ui.inputs.meta.value = p.metaNote || "";
+            ui.previewModal.classList.remove('hidden');
+        }
+
         function renderMapMarkers() {
             if (!state.mapInstance) {
                 state.mapInstance = L.map('map-container').setView([39.82, -98.58], 4);
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' }).addTo(state.mapInstance);
                 state.mapMarkersGroup = L.featureGroup().addTo(state.mapInstance);
+                
+                // Fix Leaflet Icon Issue
+                delete L.Icon.Default.prototype._getIconUrl;
+                L.Icon.Default.mergeOptions({
+                    iconRetinaUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png',
+                    iconUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png',
+                    shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
+                });
             }
             state.mapMarkersGroup.clearLayers();
             const validPhotos = state.photos.filter(p => p.lat && p.lon && p.projectId === state.settings.projectId);
             ui.mapPhotoCount.innerText = `${validPhotos.length} Photos`;
             validPhotos.forEach(p => {
                 const marker = L.marker([p.lat, p.lon]);
-                marker.bindPopup(`<b>#${p.photoNumber}</b><br>${p.timestamp}<br>${p.metaNote || ""}`);
+                marker.bindPopup(`<b>#${p.photoNumber}</b><br>${p.timestamp}<br>${p.metaNote || ""}<br><img src="${p.displayUrl}" style="width:100px; margin-top:5px;">`);
                 marker.addTo(state.mapMarkersGroup);
             });
             if (validPhotos.length > 0) state.mapInstance.fitBounds(state.mapMarkersGroup.getBounds().pad(0.1));
             else if (state.currentLat) state.mapInstance.setView([state.currentLat, state.currentLon], 15);
             setTimeout(() => { state.mapInstance.invalidateSize(); }, 200);
+        }
+
+        // --- MAP HTML EXPORT ---
+        function generateMapHTML(photos) {
+            const markers = photos.filter(p => p.lat && p.lon).map(p => ({
+                lat: p.lat, lon: p.lon, title: `Photo #${p.photoNumber}`, 
+                desc: `${p.timestamp}<br>${p.captions.c1} ${p.captions.c2}`
+            }));
+            
+            return `<!DOCTYPE html><html><head><title>Project Map</title>
+            <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+            <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>
+            <style>body{margin:0;padding:0;}#map{width:100vw;height:100vh;}</style></head><body><div id="map"></div>
+            <script>
+                var map = L.map('map').setView([${markers.length > 0 ? markers[0].lat : 0}, ${markers.length > 0 ? markers[0].lon : 0}], 13);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+                var group = L.featureGroup();
+                ${markers.map(m => `L.marker([${m.lat}, ${m.lon}]).bindPopup("<b>${m.title}</b><br>${m.desc}").addTo(group);`).join('\n')}
+                group.addTo(map);
+                map.fitBounds(group.getBounds());
+            <\/script></body></html>`;
+        }
+
+        // --- PDF GENERATION WRAPPER ---
+        async function generatePDFReport() {
+            setProcessing(true, "Generating PDF...");
+            try {
+                // Filter current project photos only
+                const reportPhotos = state.photos.filter(p => p.projectId === state.settings.projectId);
+                const reportNotes = state.notes.filter(n => n.projectId === state.settings.projectId);
+                
+                const doc = await createPDFDoc(reportPhotos, reportNotes);
+                doc.save(`${state.settings.reportTitle.replace(/ /g,"_")}.pdf`);
+            } catch(e) {
+                console.error(e);
+                showAlert("Error generating PDF: " + e.message);
+            } finally {
+                setProcessing(false);
+            }
+        }
+
+        function loadSettingsUI() {
+            ui.sAuth.value = state.settings.author; ui.sNum.value = state.settings.nextNum; ui.sC1.value = state.settings.defC1; ui.sC2.value = state.settings.defC2; ui.sC3.value = state.settings.defC3; ui.sBurn.checked = state.settings.burnIn; ui.sFont.value = state.settings.fontScale; ui.sComp.checked = state.settings.compassUi; ui.sPlay.value = state.settings.pdfLayout; ui.sPres.value = state.settings.pdfRes; ui.sImap.checked = state.settings.incMap; ui.sInotes.checked = state.settings.incNotes; ui.sGps.value = state.settings.gpsFmt;
+            if(user) { ui.projectListContainer.classList.remove('hidden'); }
+        }
+
+        function saveSettingsUI() {
+            state.settings.author = ui.sAuth.value; state.settings.nextNum = parseInt(ui.sNum.value); state.settings.defC1 = ui.sC1.value; state.settings.defC2 = ui.sC2.value; state.settings.defC3 = ui.sC3.value; state.settings.burnIn = ui.sBurn.checked; state.settings.fontScale = parseInt(ui.sFont.value); state.settings.compassUi = ui.sComp.checked; state.settings.pdfLayout = parseInt(ui.sPlay.value); state.settings.pdfRes = parseInt(ui.sPres.value); state.settings.incMap = ui.sImap.checked; state.settings.incNotes = ui.sInotes.checked; state.settings.gpsFmt = ui.sGps.value;
+            localStorage.setItem('fc_auth', state.settings.author); localStorage.setItem('fc_num', state.settings.nextNum); localStorage.setItem('fc_c1', state.settings.defC1); localStorage.setItem('fc_c2', state.settings.defC2); localStorage.setItem('fc_c3', state.settings.defC3); localStorage.setItem('fc_burn', state.settings.burnIn); localStorage.setItem('fc_font', state.settings.fontScale); localStorage.setItem('fc_comp', state.settings.compassUi); localStorage.setItem('fc_play', state.settings.pdfLayout); localStorage.setItem('fc_pres', state.settings.pdfRes); localStorage.setItem('fc_imap', state.settings.incMap); localStorage.setItem('fc_inotes', state.settings.incNotes); localStorage.setItem('fc_gps', state.settings.gpsFmt);
+            ui.projectModal.classList.add('hidden');
         }
 
         // --- EXPORT FUNCTIONS ---
@@ -1034,10 +993,10 @@
             setProcessing(true, "Packaging Project...");
             try {
                 const zip = new JSZip(); const folderPhotos = zip.folder("Photos"); const folderReport = zip.folder("Report"); const folderData = zip.folder("Data");
-                const photos = state.photos.filter(p => p.projectId === state.settings.projectId);
-                
-                let photoLogCSV = "Filename,Date,Time,Latitude,Longitude,Heading,Caption1,Caption2,Caption3,Note\n";
-                for (const p of photos) {
+                const photos = await DB.getAll('photos'); let photoLogCSV = "Filename,Date,Time,Latitude,Longitude,Heading,Caption1,Caption2,Caption3,Note\n";
+                const relevantPhotos = photos.filter(p => p.projectId === state.settings.projectId);
+
+                for (const p of relevantPhotos) {
                     let blob = await blobToBuffer(p.finalBlob || (p.finalBuffer ? new Blob([p.finalBuffer]) : null));
                     if (blob) {
                         const filename = `IMG_${p.photoNumber}_${p.id}.jpg`; folderPhotos.file(filename, blob);
@@ -1047,10 +1006,11 @@
                 }
                 folderData.file("Photo_Log.csv", photoLogCSV);
                 const notes = await DB.getAll('notes'); let notesCSV = "ID,Timestamp,Location,Text\n";
-                notes.forEach(n => { notesCSV += `${n.id},"${n.timestamp}","${n.location}","${n.text.replace(/"/g, '""')}"\n`; });
+                const relevantNotes = notes.filter(n => n.projectId === state.settings.projectId);
+                relevantNotes.forEach(n => { notesCSV += `${n.id},"${n.timestamp}","${n.location}","${n.text.replace(/"/g, '""')}"\n`; });
                 folderData.file("Field_Notes.csv", notesCSV);
-                const doc = await createPDFDoc(photos, notes); folderReport.file(`${state.settings.reportTitle.replace(/ /g,"_")}.pdf`, doc.output('blob'));
-                const mapHTML = generateMapHTML(photos); folderReport.file("Project_Map.html", mapHTML);
+                const doc = await createPDFDoc(relevantPhotos, relevantNotes); folderReport.file(`${state.settings.reportTitle.replace(/ /g,"_")}.pdf`, doc.output('blob'));
+                const mapHTML = generateMapHTML(relevantPhotos); folderReport.file("Project_Map.html", mapHTML);
                 const content = await zip.generateAsync({type:"blob"}); 
                 const filename = `Project_Export_${state.settings.projectId || "FieldCam"}_${Date.now()}.zip`;
                 const file = new File([content], filename, { type: "application/zip" });
@@ -1088,7 +1048,7 @@
         async function downloadZip(idSet) {
             setProcessing(true, "Zipping...");
             const zip = new JSZip();
-            const targets = idSet ? state.photos.filter(p => idSet.has(p.id)) : state.photos.filter(p => p.projectId === state.settings.projectId);
+            const targets = idSet ? state.photos.filter(p => idSet.has(p.id)) : state.photos;
             if (targets.length === 0) { setProcessing(false); return showAlert("No photos to download."); }
             let csv = "Filename,Date,Lat,Lon,Direction,Note,Cap1,Cap2,Cap3\n";
             for (const p of targets) {
@@ -1115,23 +1075,17 @@
         // --- Project Management Logic ---
         async function fetchUserProjects() {
             if(!user) return;
-            // Guard clause if user doesn't have an ID yet
-            if(!user.uid) return;
             const ref = collection(db, 'artifacts', appId, 'users', user.uid, 'projects');
             unsubscribeProjects = onSnapshot(ref, (snap) => {
                 state.userProjects = [];
                 snap.forEach(doc => state.userProjects.push({ ...doc.data(), id: doc.id }));
                 renderProjectList();
-            }, (err) => {
-                 console.warn("Project sync error (expected if permissions not set):", err);
             });
         }
 
         async function createProject() {
             const name = ui.newProjectInput.value.trim();
             if(!name) return;
-            // Guard
-            if (!user) { showAlert("Must be logged in to sync projects."); return; }
             const projectId = name.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase() + '-' + Date.now().toString().slice(-4);
             const ref = doc(db, 'artifacts', appId, 'users', user.uid, 'projects', projectId);
             await setDoc(ref, { name: name, created: Date.now() });
@@ -1142,15 +1096,11 @@
         async function switchProject(newPid) {
             state.settings.projectId = newPid;
             localStorage.setItem('fc_pid', newPid);
-            // Don't clear arrays, just re-filter view. 
-            // Actually, for performance, we might want to keep everything in memory and just filter render.
-            // The previous logic cleared them, which required a full reload. 
-            // Let's just re-render.
-            renderGallery();
-            renderNotes();
+            // Don't clear arrays, just re-render to filter
+            // But we do need to reload from DB incase filtering logic requires it
+            await restoreSession(); // This handles filtering by projectId
             updateProjectUI(newPid);
             
-            // Re-sync logic for cloud
             if(state.settings.cloudEnabled && user) {
                 if(unsubscribeNotes) unsubscribeNotes();
                 if(unsubscribePhotos) unsubscribePhotos();
@@ -1160,7 +1110,6 @@
 
         async function deleteProject(pid) {
             if(!await showConfirm("Remove this project from list? Data will remain in cloud.")) return;
-             if (!user) return;
             const ref = doc(db, 'artifacts', appId, 'users', user.uid, 'projects', pid);
             await deleteDoc(ref);
             if(state.settings.projectId === pid) switchProject("default-project");
@@ -1192,12 +1141,10 @@
         // --- Rest of standard logic ---
         function updateAuthUI() {
             if(user) {
-                if(!user.isAnonymous) {
-                    ui.authStatusContainer.classList.remove('hidden');
-                    ui.userEmailDisplay.innerText = user.email;
-                    ui.logoutBtn.classList.remove('hidden');
-                    ui.sCloudEnable.checked = true; state.settings.cloudEnabled = true;
-                }
+                ui.authStatusContainer.classList.remove('hidden');
+                ui.userEmailDisplay.innerText = user.email || "Anonymous User";
+                ui.logoutBtn.classList.remove('hidden');
+                ui.sCloudEnable.checked = true; state.settings.cloudEnabled = true;
             } else {
                 ui.authStatusContainer.classList.add('hidden');
                 ui.logoutBtn.classList.add('hidden');
@@ -1216,8 +1163,6 @@
         async function handleLogout() {
             await signOut(auth);
             state.settings.cloudEnabled = false; ui.sCloudEnable.checked = false; localStorage.setItem('fc_cloud', 'false');
-            // Re-sign in anonymously to maintain DB connection if needed
-            await signInAnonymously(auth);
         }
         function updateCloudUI(status) {
             ui.cloudStatus.className = 'absolute top-1 right-1 w-2 h-2 rounded-full border border-gray-700 ';
@@ -1244,6 +1189,7 @@
             updateCloudUI('sync');
             try {
                 const docId = `${state.settings.projectId}_${id}`;
+                // STRICT PATH RULE
                 await setDoc(doc(db, 'artifacts', appId, 'public', 'data', col, docId), { ...data, _pid: state.settings.projectId, _uid: user.uid }, { merge: true });
                 updateCloudUI('on');
                 return true; // Return success
@@ -1321,7 +1267,7 @@
                         renderNotes();
                     }
                 });
-            }, (err) => console.log(err));
+            });
             
             unsubscribePhotos = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'shared_photos'), (snap) => {
                 snap.docChanges().forEach(async (c) => {
@@ -1351,7 +1297,7 @@
                         }
                     }
                 });
-            }, (err) => console.log(err));
+            });
         }
 
         // --- Standard Logic ---
@@ -1424,28 +1370,15 @@
             ui.loginSubmit.onclick = handleLogin;
             ui.loginCancel.onclick = () => ui.loginModal.classList.add('hidden');
             ui.logoutBtn.onclick = handleLogout;
-            ui.sCloudEnable.onchange = (e) => { 
-                if(e.target.checked && (!user || user.isAnonymous)) { 
-                    e.target.checked=false; ui.loginModal.classList.remove('hidden'); 
-                } else if (!e.target.checked) {
-                    // Do nothing or optional logout
-                }
-            };
+            ui.sCloudEnable.onchange = (e) => { if(e.target.checked && !user) { e.target.checked=false; ui.loginModal.classList.remove('hidden'); } else if (!e.target.checked) handleLogout(); };
 
             ui.snapBtn.onclick = () => ui.nativeInput.click();
             ui.nativeInput.onchange = (e) => { if(e.target.files[0]) handleCapturedBlob(e.target.files[0]); };
             ui.addNoteBtn.onclick = saveNote;
             ui.cancelNoteEditBtn.onclick = resetNoteInput;
 
-            ui.navCamera.onclick = () => { 
-                ui.modCamera.classList.remove('hidden'); ui.modNotes.classList.add('hidden'); ui.modMap.classList.add('hidden'); 
-                ui.navCamera.classList.add('nav-active'); ui.navNotes.classList.remove('nav-active'); ui.navMap.classList.remove('nav-active');
-            };
-            ui.navNotes.onclick = () => { 
-                ui.modCamera.classList.add('hidden'); ui.modNotes.classList.remove('hidden'); ui.modMap.classList.add('hidden'); 
-                ui.navCamera.classList.remove('nav-active'); ui.navNotes.classList.add('nav-active'); ui.navMap.classList.remove('nav-active');
-                renderNotes();
-            };
+            ui.navCamera.onclick = () => { ui.modCamera.classList.remove('hidden'); ui.modNotes.classList.add('hidden'); ui.modMap.classList.add('hidden'); ui.navCamera.classList.add('nav-active'); ui.navNotes.classList.remove('nav-active'); ui.navMap.classList.remove('nav-active'); };
+            ui.navNotes.onclick = () => { ui.modCamera.classList.add('hidden'); ui.modNotes.classList.remove('hidden'); ui.modMap.classList.add('hidden'); ui.navCamera.classList.remove('nav-active'); ui.navNotes.classList.add('nav-active'); ui.navMap.classList.remove('nav-active'); };
             ui.navMap.onclick = () => { 
                 ui.modCamera.classList.add('hidden'); 
                 ui.modNotes.classList.add('hidden'); 
@@ -1476,13 +1409,6 @@
             if(ui.exportPdfGalleryBtn) ui.exportPdfGalleryBtn.onclick = generatePDFReport;
             if(ui.downloadAll) ui.downloadAll.onclick = () => downloadZip(null);
             if(ui.downloadSelected) ui.downloadSelected.onclick = () => downloadZip(state.selectedIds);
-            if(ui.toggleSelect) ui.toggleSelect.onclick = () => {
-                ui.toggleSelect.classList.toggle('bg-gray-700'); ui.toggleSelect.classList.toggle('bg-indigo-600');
-                if(ui.toggleSelect.classList.contains('bg-indigo-600')) ui.selectionToolbar.classList.remove('hidden');
-                else { ui.selectionToolbar.classList.add('hidden'); state.selectedIds.clear(); renderGallery(); }
-            };
-            if(ui.cancelSelectBtn) ui.cancelSelectBtn.onclick = () => { ui.toggleSelect.click(); };
-            
             if(ui.deleteSelected) ui.deleteSelected.onclick = async () => { if(await showConfirm("Delete selected items?")) { for(let id of state.selectedIds) await DB.delete('photos', id); state.photos = state.photos.filter(p=>!state.selectedIds.has(p.id)); state.selectedIds.clear(); renderGallery(); } };
             if(ui.deleteSingleBtn) ui.deleteSingleBtn.onclick = async () => { if(await showConfirm("Delete this photo?")) { await DB.delete('photos', state.editingId); state.photos = state.photos.filter(p=>p.id!==state.editingId); ui.previewModal.classList.add('hidden'); renderGallery(); } };
             if(ui.newVisitBtn) ui.newVisitBtn.onclick = async () => { if(await showConfirm("Reset project?")) { await DB.clear('photos'); await DB.clear('notes'); state.photos=[]; state.notes=[]; state.selectedIds.clear(); state.settings.nextNum=1; localStorage.setItem('fc_num',1); renderGallery(); renderNotes(); loadSettingsUI(); } };
@@ -1554,33 +1480,8 @@
             setupDictation();
             setupEventListeners();
             restoreSession();
-            // Start compass if supported
-            if (window.DeviceOrientationEvent && typeof window.DeviceOrientationEvent.requestPermission === 'function') {
-                 // Needs gesture
-                 ui.enableCompassBtn.classList.remove('hidden');
-                 ui.enableCompassBtn.onclick = () => {
-                     DeviceOrientationEvent.requestPermission()
-                     .then(resp => {
-                         if (resp === 'granted') {
-                             window.addEventListener('deviceorientation', handleOrientation);
-                             ui.enableCompassBtn.classList.add('hidden');
-                         } else { alert("Compass permission denied"); }
-                     })
-                     .catch(console.error);
-                 };
-            } else {
-                 window.addEventListener('deviceorientation', handleOrientation);
-                 ui.enableCompassBtn.classList.add('hidden');
-            }
+            updateProjectUI(state.settings.projectId);
         };
-
-        function handleOrientation(e) {
-            if (!state.settings.compassUi) return;
-            let compass = e.webkitCompassHeading || Math.abs(e.alpha - 360);
-            if(compass) {
-                 document.getElementById('compass-text').innerText = Math.round(compass) + "°";
-            }
-        }
     </script>
 </body>
 </html>
