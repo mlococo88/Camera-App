@@ -379,6 +379,21 @@
             </div>
         </div>
     </div>
+    
+    <!-- External Config Modal (NEW) -->
+    <div id="config-modal" class="fixed inset-0 z-[110] bg-black/95 flex items-center justify-center p-4 hidden">
+        <div class="bg-gray-800 rounded-xl w-full max-w-lg p-6 border border-red-700 shadow-2xl">
+            <h3 class="text-xl font-bold text-red-400 mb-4">Cloud Configuration Required</h3>
+            <p class="text-sm text-gray-300 mb-4">Firebase settings were not detected. To enable cloud features on this external host (like GitHub), please enter your Firebase Config JSON.</p>
+            <div>
+                <label class="block text-xs text-gray-400 mb-1">Firebase Config JSON</label>
+                <textarea id="config-json-input" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-600 text-xs font-mono h-32 resize-none" placeholder='{"apiKey": "...", "authDomain": "...", ...}'></textarea>
+            </div>
+            <div id="config-error" class="text-red-500 text-xs mt-2 hidden">Invalid JSON or config missing required fields.</div>
+            <button id="config-submit-btn" class="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-3 rounded text-sm mt-4">Initialize Cloud</button>
+        </div>
+    </div>
+
 
     <div id="custom-alert-overlay" class="fixed inset-0 z-[100] custom-modal-overlay hidden flex items-center justify-center p-4 animate-fade-in">
         <div class="bg-gray-800 rounded-lg shadow-2xl max-w-sm w-full border border-gray-700 transform transition-all">
@@ -399,60 +414,112 @@
         let app, auth, db, user, unsubscribeNotes, unsubscribePhotos, unsubscribeProjects;
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-fieldcam';
 
-        async function initFirebase() {
-            try {
-                let config = null;
-                if(typeof __firebase_config !== 'undefined') config = JSON.parse(__firebase_config);
-                
-                if (config) {
-                    app = initializeApp(config);
-                    auth = getAuth(app);
-                    db = getFirestore(app);
+        // Variable to store the manually entered config for external use
+        let manualFirebaseConfig = null;
 
-                    // FIX: Ensure authentication is completed (either custom token or anonymous)
-                    // before proceeding to Firestore operations via onAuthStateChanged.
-                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                        try {
-                            await signInWithCustomToken(auth, __initial_auth_token);
-                        } catch(e) {
-                             // Fallback to anonymous sign-in if custom token fails (e.g., expired or invalid)
-                            console.warn("Custom token sign-in failed, falling back to anonymous.", e);
-                            await signInAnonymously(auth);
-                        }
-                    } else {
-                        // FIX: Sign in anonymously if the custom token variable is missing or empty
+        async function initFirebase() {
+            let config = null;
+
+            // 1. Check Canvas environment config first
+            if(typeof __firebase_config !== 'undefined') {
+                try {
+                    config = JSON.parse(__firebase_config);
+                } catch(e) {
+                    console.error("Canvas Firebase config parsing failed:", e);
+                }
+            }
+            
+            // 2. Check manually stored config (from a previous session on GitHub)
+            if (!config && localStorage.getItem('fc_firebase_config')) {
+                try {
+                    config = JSON.parse(localStorage.getItem('fc_firebase_config'));
+                    manualFirebaseConfig = config;
+                } catch (e) {
+                    console.error("Local Firebase config parsing failed:", e);
+                    localStorage.removeItem('fc_firebase_config');
+                }
+            }
+
+            // 3. If config is still missing, show the manual input modal (for GitHub deployment)
+            if (!config) {
+                 console.warn("Firebase config missing. Prompting user for manual configuration.");
+                 ui.configModal.classList.remove('hidden');
+                 return; // Halt initialization until config is provided
+            }
+
+            // --- Initialization using available config ---
+            try {
+                app = initializeApp(config);
+                auth = getAuth(app);
+                db = getFirestore(app);
+
+                // Determine authentication flow
+                const customToken = typeof __initial_auth_token !== 'undefined' && __initial_auth_token;
+                
+                if (customToken) {
+                    try {
+                        await signInWithCustomToken(auth, customToken);
+                    } catch(e) {
+                        console.warn("Custom token sign-in failed, falling back to anonymous.", e);
                         await signInAnonymously(auth);
                     }
-
-                    // This listener fires immediately after the sign-in above completes.
-                    onAuthStateChanged(auth, (u) => {
-                        user = u;
-                        updateAuthUI();
-                        if(u) {
-                            fetchUserProjects(); // Load project list
-                            if(state.settings.cloudEnabled && state.settings.projectId) startCloudSync();
-                        } else {
-                            // This branch handles explicit sign-out or session termination
-                            updateCloudUI('off');
-                            if(unsubscribeNotes) unsubscribeNotes();
-                            if(unsubscribePhotos) unsubscribePhotos();
-                        }
-                    });
                 } else {
-                    console.warn("Firebase config missing. Running offline.");
+                    // If running outside Canvas OR token failed, sign in anonymously.
+                    await signInAnonymously(auth);
+                }
+
+                // This listener fires immediately after the sign-in above completes.
+                onAuthStateChanged(auth, (u) => {
+                    user = u;
+                    updateAuthUI();
+                    if(u) {
+                        fetchUserProjects(); // Load project list
+                        if(state.settings.cloudEnabled && state.settings.projectId) startCloudSync();
+                    } else {
+                        updateCloudUI('off');
+                        if(unsubscribeNotes) unsubscribeNotes();
+                        if(unsubscribePhotos) unsubscribePhotos();
+                    }
+                });
+            } catch (e) { 
+                console.error("Firebase Init Error", e); 
+                showAlert("Firebase initialization failed. Check console for details.");
+            }
+            
+            // Add network change listeners
+            window.addEventListener('online', () => {
+                updateCloudUI(user ? 'on' : 'off');
+                if(user && state.settings.cloudEnabled) syncPendingItems();
+            });
+            
+            window.addEventListener('offline', () => {
+                updateCloudUI('offline-network');
+            });
+        }
+        
+        async function handleConfigSubmit() {
+            const configJson = ui.configJsonInput.value.trim();
+            ui.configError.classList.add('hidden');
+            try {
+                const config = JSON.parse(configJson);
+                // Simple validation check
+                if (!config.apiKey || !config.projectId) {
+                    throw new Error("Missing required fields (apiKey, projectId)");
                 }
                 
-                // Add online listener for re-sync
-                window.addEventListener('online', () => {
-                    updateCloudUI(user ? 'on' : 'off');
-                    if(user && state.settings.cloudEnabled) syncPendingItems();
-                });
+                // Save config locally for persistence on external hosts
+                localStorage.setItem('fc_firebase_config', configJson);
+                manualFirebaseConfig = config;
                 
-                window.addEventListener('offline', () => {
-                    updateCloudUI('offline-network');
-                });
-
-            } catch (e) { console.error("Firebase Init Error", e); }
+                ui.configModal.classList.add('hidden');
+                // Re-start the initialization process using the new config
+                await initFirebase(); 
+                
+            } catch (e) {
+                console.error("Configuration Error:", e);
+                ui.configError.textContent = `Error: ${e.message}. Please enter valid Firebase config JSON.`;
+                ui.configError.classList.remove('hidden');
+            }
         }
 
         // --- Globals ---
@@ -460,7 +527,7 @@
             name: 'FieldCamDB', version: 3, 
             open: function() { return new Promise((res, rej) => { const req = indexedDB.open(this.name, this.version); req.onupgradeneeded = (e) => { const db = e.target.result; if (!db.objectStoreNames.contains('photos')) db.createObjectStore('photos', { keyPath: 'id' }); if (!db.objectStoreNames.contains('notes')) db.createObjectStore('notes', { keyPath: 'id' }); }; req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error); }); },
             add: async function(s, o) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readwrite'); tx.objectStore(s).put(o); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); },
-            getAll: async function(s) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readonly'); const req = tx.objectStore(s).getAll(); req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error); }); },
+            getAll: async function(s) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readonly'); const req = tx.objectStore(s).getAll(); req.onsuccess = () => res(req.result); req.onerror = () => rej(tx.error); }); },
             delete: async function(s, id) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readwrite'); tx.objectStore(s).delete(id); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); },
             clear: async function(s) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readwrite'); tx.objectStore(s).clear(); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); },
             get: async function(s, id) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readonly'); const req = tx.objectStore(s).get(id); req.onsuccess = () => res(req.result); req.onerror = () => rej(tx.error); }); }
@@ -490,8 +557,10 @@
             cloudBtn: document.getElementById('cloud-sync-btn'), cloudStatus: document.getElementById('cloud-icon-status'), cloudMsg: document.getElementById('cloud-status-msg'), sCloudEnable: document.getElementById('set-cloud-enable'),
             loginModal: document.getElementById('login-modal'), loginEmail: document.getElementById('login-email'), loginPass: document.getElementById('login-password'), loginSubmit: document.getElementById('login-submit-btn'), loginCancel: document.getElementById('login-cancel-btn'), loginError: document.getElementById('login-error'),
             authStatusContainer: document.getElementById('auth-status-container'), userEmailDisplay: document.getElementById('user-email-display'), logoutBtn: document.getElementById('logout-btn'),
-            // FIX: Added manual login button to UI references
             loginManualBtn: document.getElementById('login-manual-btn'),
+            // New Config Modal UI elements
+            configModal: document.getElementById('config-modal'), configJsonInput: document.getElementById('config-json-input'), configSubmit: document.getElementById('config-submit-btn'), configError: document.getElementById('config-error'),
+
             // Project UI
             projectListContainer: document.getElementById('project-list-container'), projectList: document.getElementById('project-list'), manageProjectsBtn: document.getElementById('manage-projects-btn'), addProjectBtn: document.getElementById('add-project-btn'), newProjectInput: document.getElementById('new-project-input'), currentProjectLabel: document.getElementById('current-project-label'),
             // Core
@@ -516,7 +585,7 @@
             downloadProjectBtn: document.getElementById('download-project-btn'), backupBtn: document.getElementById('backup-btn')
         };
         
-        // --- CORE FUNCTIONS ---
+        // --- CORE FUNCTIONS (Rest of application logic remains the same) ---
         
         async function restoreSession() {
             setProcessing(true, "Loading...");
@@ -1432,6 +1501,9 @@
             ui.saveProjectBtn.onclick = () => { saveSettingsUI(); restoreSession(); };
             ui.manageProjectsBtn.onclick = () => ui.projectListContainer.classList.toggle('hidden');
             ui.addProjectBtn.onclick = createProject;
+            
+            // New Listener for config modal submit
+            ui.configSubmit.onclick = handleConfigSubmit;
 
             ui.loginSubmit.onclick = handleLogin;
             ui.loginCancel.onclick = () => ui.loginModal.classList.add('hidden');
@@ -1597,8 +1669,8 @@
             initCamera();
             setupDictation();
             setupEventListeners();
-            restoreSession();
-            updateProjectUI(state.settings.projectId);
+            
+            // Note: restoreSession and updateProjectUI are called after Firebase init completion
         };
     </script>
 </body>
