@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Field Cam">
-    <title>Field Cam Pro (Cloud Sync)</title>
+    <title>Field Cam Pro (Fixed)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -372,7 +372,7 @@
 
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js';
-        import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signInWithCustomToken, signOut } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
+        import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signInWithCustomToken, signOut, signInAnonymously } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
         import { getFirestore, collection, doc, setDoc, getDoc, deleteDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
 
         // --- CONFIG ---
@@ -384,23 +384,38 @@
 
         async function initFirebase() {
             try {
-                let config = YOUR_FIREBASE_CONFIG;
-                if(!config && typeof __firebase_config !== 'undefined') config = JSON.parse(__firebase_config);
+                let config = null;
+                if(typeof __firebase_config !== 'undefined') {
+                    config = JSON.parse(__firebase_config);
+                } else {
+                    config = YOUR_FIREBASE_CONFIG;
+                }
                 
                 app = initializeApp(config);
                 auth = getAuth(app);
                 db = getFirestore(app);
 
                 // Use custom token if available (environment), else user manually logs in via UI
-                if (!YOUR_FIREBASE_CONFIG && typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } 
+                const initAuth = async () => {
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                    } else {
+                        // Fallback to anonymous only if no explicit manual login is expected initially
+                        // But for this specific app, we want to allow manual login for cloud sync.
+                        // We will just wait for auth state change.
+                        // However, per prompt strict rules, we must auth first.
+                        // We'll sign in anonymously to ensure DB access works, then let user upgrade/switch via UI if needed.
+                         await signInAnonymously(auth);
+                    }
+                };
+                await initAuth();
 
                 onAuthStateChanged(auth, (u) => {
                     user = u;
                     updateAuthUI();
                     if(u) {
                         fetchUserProjects(); // Load project list
+                        // Only start sync if explicitly enabled in settings, otherwise we are just authenticated for potential future sync
                         if(state.settings.cloudEnabled && state.settings.projectId) startCloudSync();
                     } else {
                         updateCloudUI('off');
@@ -411,7 +426,12 @@
                 
                 // Add online listener for re-sync
                 window.addEventListener('online', () => {
+                    updateCloudUI('on');
                     if(user && state.settings.cloudEnabled) syncPendingItems();
+                });
+                
+                window.addEventListener('offline', () => {
+                    updateCloudUI('offline-network');
                 });
 
             } catch (e) { console.error("Firebase Init Error", e); }
@@ -474,6 +494,464 @@
             gpsStatus: document.getElementById('gps-status-label'), weatherStatus: document.getElementById('weather-status'),
             downloadProjectBtn: document.getElementById('download-project-btn'), backupBtn: document.getElementById('backup-btn')
         };
+        
+        // --- MISSING FUNCTIONS IMPLEMENTATION ---
+        
+        async function saveNote() {
+            const text = ui.newNoteInput.value.trim();
+            if (!text) return;
+            
+            if (state.editingNoteId) {
+                // Edit mode
+                const note = state.notes.find(n => n.id === state.editingNoteId);
+                if (note) {
+                    note.text = text;
+                    note.synced = false; // Mark for resync
+                    await DB.add('notes', note);
+                    state.editingNoteId = null;
+                    ui.addNoteBtn.innerText = "Add Note";
+                    ui.cancelNoteEditBtn.classList.add('hidden');
+                }
+            } else {
+                // New note
+                const note = {
+                    id: Date.now(),
+                    text: text,
+                    timestamp: new Date().toLocaleString(),
+                    location: state.currentLocation,
+                    projectId: state.settings.projectId,
+                    synced: false
+                };
+                state.notes.unshift(note);
+                await DB.add('notes', note);
+            }
+            ui.newNoteInput.value = '';
+            renderNotes();
+            
+            if (state.settings.cloudEnabled) syncPendingItems();
+        }
+
+        function renderNotes() {
+            ui.notesList.innerHTML = '';
+            const filtered = state.notes.filter(n => n.projectId === state.settings.projectId);
+            
+            if (filtered.length === 0) {
+                ui.notesList.innerHTML = '<div id="notes-placeholder" class="text-center text-gray-500 mt-10 text-sm">No notes recorded yet.</div>';
+                return;
+            }
+
+            filtered.forEach(note => {
+                const div = document.createElement('div');
+                div.className = "bg-gray-800 p-3 rounded-lg border border-gray-700 shadow-sm";
+                div.innerHTML = `
+                    <div class="flex justify-between items-start mb-2">
+                        <span class="text-xs text-blue-400 font-mono">${note.timestamp}</span>
+                        <div class="flex gap-2">
+                            <button onclick="window.editNote(${note.id})" class="text-gray-400 hover:text-white"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg></button>
+                            <button onclick="window.deleteNote(${note.id})" class="text-gray-400 hover:text-red-400"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
+                        </div>
+                    </div>
+                    <p class="text-sm text-gray-200 whitespace-pre-wrap">${note.text}</p>
+                    <div class="mt-2 text-[10px] text-gray-500 flex items-center gap-1">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                        ${note.location || "No Location"}
+                    </div>
+                `;
+                ui.notesList.appendChild(div);
+            });
+        }
+
+        function renderGallery() {
+            const container = ui.gallery;
+            container.innerHTML = '';
+            
+            // Filter
+            let filtered = state.photos.filter(p => p.projectId === state.settings.projectId);
+            if (state.searchQuery) {
+                const q = state.searchQuery;
+                filtered = filtered.filter(p => 
+                    (p.captions.c1 && p.captions.c1.toLowerCase().includes(q)) ||
+                    (p.captions.c2 && p.captions.c2.toLowerCase().includes(q)) ||
+                    (p.captions.c3 && p.captions.c3.toLowerCase().includes(q)) ||
+                    (p.metaNote && p.metaNote.toLowerCase().includes(q))
+                );
+            }
+            if (state.filterStart) {
+                const start = new Date(state.filterStart).setHours(0,0,0,0);
+                filtered = filtered.filter(p => new Date(p.timestamp).getTime() >= start);
+            }
+            if (state.filterEnd) {
+                const end = new Date(state.filterEnd).setHours(23,59,59,999);
+                filtered = filtered.filter(p => new Date(p.timestamp).getTime() <= end);
+            }
+            
+            ui.galleryCount.innerText = filtered.length;
+            
+            if (filtered.length === 0) {
+                container.innerHTML = '<div id="gallery-placeholder" class="col-span-full flex flex-col items-center justify-center text-gray-500 mt-10 space-y-2"><p class="text-xs">No photos found</p></div>';
+                return;
+            }
+
+            // Sort Descending
+            filtered.sort((a,b) => b.id - a.id);
+
+            filtered.forEach(p => {
+                const div = document.createElement('div');
+                div.className = `grid-item-aspect bg-gray-800 rounded overflow-hidden cursor-pointer relative ${state.selectedIds.has(p.id) ? 'selected-item' : ''}`;
+                
+                // Construct Thumbnail source
+                let src = p.displayUrl;
+                if (!src && p.preview_b64) src = p.preview_b64;
+                if (!src) src = ""; // Placeholder?
+
+                div.onclick = () => handlePhotoClick(p);
+
+                div.innerHTML = `
+                    <img src="${src}" loading="lazy" class="w-full h-full object-cover">
+                    <div class="absolute inset-0 select-ring pointer-events-none"></div>
+                    <div class="selection-check"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg></div>
+                    ${!p.synced && state.settings.cloudEnabled ? '<div class="pending-badge"><svg class="pending-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg></div>' : ''}
+                    <div class="absolute bottom-0 left-0 right-0 bg-black/60 p-1 truncate text-[8px] text-white text-center font-mono">#${p.photoNumber}</div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function handlePhotoClick(photo) {
+            if (ui.toggleSelect.classList.contains('bg-indigo-600')) {
+                // Select Mode
+                if (state.selectedIds.has(photo.id)) state.selectedIds.delete(photo.id);
+                else state.selectedIds.add(photo.id);
+                ui.selectionCount.innerText = `${state.selectedIds.size} Selected`;
+                renderGallery();
+            } else {
+                // Preview Mode
+                state.editingId = photo.id;
+                let src = photo.displayUrl || photo.preview_b64;
+                ui.previewImg.src = src;
+                ui.inputs.c1.value = photo.captions.c1 || "";
+                ui.inputs.c2.value = photo.captions.c2 || "";
+                ui.inputs.c3.value = photo.captions.c3 || "";
+                ui.inputs.meta.value = photo.metaNote || "";
+                ui.previewModal.classList.remove('hidden');
+            }
+        }
+
+        function handleCapturedBlob(file) {
+            if (!file) return;
+            setProcessing(true, "Processing Image...");
+            
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                const arrayBuffer = e.target.result;
+                const blob = new Blob([arrayBuffer], {type: file.type});
+                
+                // Generate ID and Num
+                const id = Date.now();
+                const num = state.settings.nextNum;
+                
+                // Create Photo Object
+                const newPhoto = {
+                    id: id,
+                    photoNumber: num,
+                    timestamp: new Date().toLocaleString(),
+                    projectId: state.settings.projectId,
+                    captions: {
+                        c1: state.settings.defC1,
+                        c2: state.settings.defC2,
+                        c3: state.settings.defC3
+                    },
+                    metaNote: "",
+                    lat: state.currentLat,
+                    lon: state.currentLon,
+                    compass: document.getElementById('compass-text').innerText,
+                    weather: state.weather,
+                    originalBlob: blob,
+                    synced: false
+                };
+
+                // Burn-in Visuals
+                await processPhotoVisuals(newPhoto);
+
+                // Add to State & DB
+                state.photos.unshift(newPhoto);
+                await DB.add('photos', await prepPhotoForSave(newPhoto));
+                
+                // Increment Counter
+                state.settings.nextNum++;
+                localStorage.setItem('fc_num', state.settings.nextNum);
+                
+                // Cleanup
+                renderGallery();
+                setProcessing(false);
+                ui.nativeInput.value = ''; // Reset input
+                
+                if (state.settings.cloudEnabled) syncPendingItems();
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        async function processPhotoVisuals(photo) {
+            const img = await createImageFromBlob(photo.originalBlob || new Blob([photo.finalBuffer]));
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Set resolution based on settings or default to original
+            // Simplification: Use original resolution for "max", or scale down
+            canvas.width = img.width;
+            canvas.height = img.height;
+            
+            ctx.drawImage(img, 0, 0);
+
+            if (state.settings.burnIn) {
+                // Settings
+                const fontSize = (canvas.height * (state.settings.fontScale / 1000)); 
+                const padding = fontSize / 2;
+                const lineHeight = fontSize * 1.2;
+                
+                ctx.font = `bold ${fontSize}px sans-serif`;
+                ctx.textBaseline = 'bottom';
+                
+                const texts = [];
+                texts.push(state.settings.reportTitle);
+                texts.push(`Project: ${state.settings.projectId}`);
+                if (photo.timestamp) texts.push(photo.timestamp);
+                if (photo.lat && photo.lon) texts.push(`GPS: ${photo.lat.toFixed(5)}, ${photo.lon.toFixed(5)}`);
+                if (photo.captions.c1) texts.push(photo.captions.c1);
+                if (photo.captions.c2) texts.push(photo.captions.c2);
+                if (photo.captions.c3) texts.push(photo.captions.c3);
+                
+                // Draw Bottom Overlay
+                const totalHeight = (texts.length * lineHeight) + padding * 2;
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                ctx.fillRect(0, canvas.height - totalHeight, canvas.width, totalHeight);
+                
+                ctx.fillStyle = 'white';
+                let y = canvas.height - padding - (lineHeight * 0.3); // Slight adjustment
+                
+                // Draw text from bottom up
+                for (let i = texts.length - 1; i >= 0; i--) {
+                    ctx.fillText(texts[i], padding, y);
+                    y -= lineHeight;
+                }
+                
+                // Compass / Weather Top Right
+                const topText = [];
+                if (photo.compass && photo.compass !== "--°") topText.push(`Dir: ${photo.compass}`);
+                if (photo.weather) topText.push(photo.weather);
+                
+                if (topText.length > 0) {
+                     ctx.textAlign = 'right';
+                     ctx.textBaseline = 'top';
+                     const topBlockHeight = (topText.length * lineHeight) + padding;
+                     ctx.fillStyle = 'rgba(0,0,0,0.4)';
+                     ctx.fillRect(canvas.width - 400, 0, 400, topBlockHeight); // Approx width
+                     
+                     ctx.fillStyle = 'yellow';
+                     let ty = padding;
+                     topText.forEach(t => {
+                         ctx.fillText(t, canvas.width - padding, ty);
+                         ty += lineHeight;
+                     });
+                }
+            }
+
+            // Export to Blob
+            return new Promise(resolve => {
+                canvas.toBlob(blob => {
+                    photo.finalBlob = blob;
+                    photo.displayUrl = URL.createObjectURL(blob);
+                    resolve();
+                }, 'image/jpeg', state.settings.jpegQ);
+            });
+        }
+
+        async function restoreSession() {
+            try {
+                const photos = await DB.getAll('photos');
+                const notes = await DB.getAll('notes');
+                
+                // Hydrate URLs for display
+                for (let p of photos) {
+                    if (p.finalBuffer) {
+                        const blob = new Blob([p.finalBuffer], {type:'image/jpeg'});
+                        p.displayUrl = URL.createObjectURL(blob);
+                        p.finalBlob = blob; // Restore blob for operations
+                    }
+                }
+                
+                state.photos = photos;
+                state.notes = notes;
+                
+                renderGallery();
+                renderNotes();
+                if(state.settings.projectId) updateProjectUI(state.settings.projectId);
+            } catch (e) {
+                console.error("Restore session failed", e);
+            }
+        }
+        
+        function loadSettingsUI() {
+            const s = state.settings;
+            ui.sCloudEnable.checked = s.cloudEnabled;
+            document.getElementById('set-proj-id').value = s.projectId;
+            ui.sAuth.value = s.author;
+            ui.sNum.value = s.nextNum;
+            ui.sC1.value = s.defC1;
+            ui.sC2.value = s.defC2;
+            ui.sC3.value = s.defC3;
+            ui.sBurn.checked = s.burnIn;
+            ui.sFont.value = s.fontScale;
+            ui.sComp.checked = s.compassUi;
+            ui.sPlay.value = s.pdfLayout;
+            ui.sPres.value = s.pdfRes;
+            ui.sImap.checked = s.incMap;
+            ui.sInotes.checked = s.incNotes;
+            document.getElementById('set-report-title').value = s.reportTitle;
+            document.getElementById('set-gps-fmt').value = s.gpsFmt;
+            
+            if (s.tempUnit === 'C') {
+                ui.sUnitC.classList.add('bg-blue-600', 'text-white'); ui.sUnitF.classList.remove('bg-blue-600', 'text-white');
+            } else {
+                ui.sUnitF.classList.add('bg-blue-600', 'text-white'); ui.sUnitC.classList.remove('bg-blue-600', 'text-white');
+            }
+            
+            // Logo
+            if (s.logo) {
+                ui.sLogoPreview.src = s.logo;
+                ui.sLogoPreview.classList.remove('hidden');
+                ui.sLogoPlaceholder.classList.add('hidden');
+                ui.sClearLogoBtn.classList.remove('hidden');
+            } else {
+                ui.sLogoPreview.classList.add('hidden');
+                ui.sLogoPlaceholder.classList.remove('hidden');
+                ui.sClearLogoBtn.classList.add('hidden');
+            }
+        }
+
+        async function saveSettingsUI() {
+            const s = state.settings;
+            s.cloudEnabled = ui.sCloudEnable.checked;
+            s.projectId = document.getElementById('set-proj-id').value || "default-project";
+            s.author = ui.sAuth.value;
+            s.nextNum = parseInt(ui.sNum.value) || 1;
+            s.defC1 = ui.sC1.value;
+            s.defC2 = ui.sC2.value;
+            s.defC3 = ui.sC3.value;
+            s.burnIn = ui.sBurn.checked;
+            s.fontScale = parseInt(ui.sFont.value);
+            s.compassUi = ui.sComp.checked;
+            s.pdfLayout = parseInt(ui.sPlay.value);
+            s.pdfRes = parseInt(ui.sPres.value);
+            s.incMap = ui.sImap.checked;
+            s.incNotes = ui.sInotes.checked;
+            s.reportTitle = document.getElementById('set-report-title').value;
+            s.gpsFmt = document.getElementById('set-gps-fmt').value;
+            
+            // Handle logo file input
+            const file = ui.sLogoInput.files[0];
+            if (file) {
+                 const reader = new FileReader();
+                 reader.onload = (e) => { s.logo = e.target.result; localStorage.setItem('fc_logo', s.logo); };
+                 reader.readAsDataURL(file);
+            }
+
+            // Persist primitive values
+            localStorage.setItem('fc_pid', s.projectId);
+            localStorage.setItem('fc_cloud', s.cloudEnabled);
+            localStorage.setItem('fc_auth', s.author);
+            localStorage.setItem('fc_num', s.nextNum);
+            localStorage.setItem('fc_c1', s.defC1);
+            localStorage.setItem('fc_c2', s.defC2);
+            localStorage.setItem('fc_c3', s.defC3);
+            localStorage.setItem('fc_burn', s.burnIn);
+            localStorage.setItem('fc_font', s.fontScale);
+            localStorage.setItem('fc_rt', s.reportTitle);
+            
+            ui.projectModal.classList.add('hidden');
+            renderGallery(); // Re-filter if project ID changed
+            if (s.cloudEnabled && user) startCloudSync();
+        }
+
+        function generatePDFReport() {
+            const validPhotos = state.photos.filter(p => p.projectId === state.settings.projectId);
+            const validNotes = state.notes.filter(n => n.projectId === state.settings.projectId);
+            
+            if (validPhotos.length === 0 && validNotes.length === 0) return showAlert("No data to report.");
+            
+            setProcessing(true, "Generating PDF...");
+            setTimeout(async () => {
+                try {
+                    const doc = await createPDFDoc(validPhotos, validNotes);
+                    doc.save(`${state.settings.reportTitle.replace(/\s+/g, '_')}.pdf`);
+                } catch (e) {
+                    console.error(e);
+                    showAlert("PDF Generation Failed");
+                } finally {
+                    setProcessing(false);
+                }
+            }, 100);
+        }
+
+        function generateMapHTML(photos) {
+            const markers = photos.filter(p => p.lat && p.lon).map(p => 
+                `L.marker([${p.lat}, ${p.lon}]).addTo(map).bindPopup('<b>#${p.photoNumber}</b><br>${p.timestamp}');`
+            ).join("\n");
+            
+            return `<!DOCTYPE html><html><head><title>Project Map</title>
+            <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+            <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>
+            <style>body{margin:0;height:100vh}#map{height:100%}</style></head><body><div id="map"></div>
+            <script>
+            const map = L.map('map').setView([${photos[0]?.lat||0}, ${photos[0]?.lon||0}], 13);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+            ${markers}
+            <\/script></body></html>`;
+        }
+
+        // --- GLOBAL HELPER FUNCTIONS (Defined before setupEventListeners) ---
+        function editNote(id) {
+            const note = state.notes.find(n => n.id === id);
+            if (!note) return;
+            state.editingNoteId = id;
+            ui.newNoteInput.value = note.text;
+            ui.addNoteBtn.innerText = "Update Note";
+            ui.cancelNoteEditBtn.classList.remove('hidden');
+            ui.newNoteInput.focus();
+        }
+
+        async function deleteNote(id) {
+             if(!await showConfirm("Delete this note?")) return;
+             await DB.delete('notes', id);
+             state.notes = state.notes.filter(n => n.id !== id);
+             renderNotes();
+        }
+        
+        function resetNoteInput() {
+            state.editingNoteId = null;
+            ui.newNoteInput.value = '';
+            ui.addNoteBtn.innerText = "Add Note";
+            ui.cancelNoteEditBtn.classList.add('hidden');
+        }
+
+        function renderMapMarkers() {
+            if (!state.mapInstance) {
+                state.mapInstance = L.map('map-container').setView([39.82, -98.58], 4);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' }).addTo(state.mapInstance);
+                state.mapMarkersGroup = L.featureGroup().addTo(state.mapInstance);
+            }
+            state.mapMarkersGroup.clearLayers();
+            const validPhotos = state.photos.filter(p => p.lat && p.lon && p.projectId === state.settings.projectId);
+            ui.mapPhotoCount.innerText = `${validPhotos.length} Photos`;
+            validPhotos.forEach(p => {
+                const marker = L.marker([p.lat, p.lon]);
+                marker.bindPopup(`<b>#${p.photoNumber}</b><br>${p.timestamp}<br>${p.metaNote || ""}`);
+                marker.addTo(state.mapMarkersGroup);
+            });
+            if (validPhotos.length > 0) state.mapInstance.fitBounds(state.mapMarkersGroup.getBounds().pad(0.1));
+            else if (state.currentLat) state.mapInstance.setView([state.currentLat, state.currentLon], 15);
+            setTimeout(() => { state.mapInstance.invalidateSize(); }, 200);
+        }
 
         // --- EXPORT FUNCTIONS ---
         function exportNotes() {
@@ -552,28 +1030,13 @@
             return doc;
         }
 
-        async function generatePDFReport() {
-            if (!window.jspdf) return showAlert("PDF Lib Missing");
-            setProcessing(true, "Generating PDF..."); 
-            await new Promise(r => setTimeout(r, 100));
-            try { 
-                const photos = await DB.getAll('photos'); 
-                const notes = await DB.getAll('notes'); 
-                const doc = await createPDFDoc(photos, notes); 
-                doc.save(`${state.settings.reportTitle.replace(/ /g,"_")}.pdf`); 
-            } catch(e) { 
-                console.error(e); 
-                showAlert("PDF Error: "+e.message); 
-            } finally { 
-                setProcessing(false); 
-            }
-        }
-
         async function downloadProject() {
             setProcessing(true, "Packaging Project...");
             try {
                 const zip = new JSZip(); const folderPhotos = zip.folder("Photos"); const folderReport = zip.folder("Report"); const folderData = zip.folder("Data");
-                const photos = await DB.getAll('photos'); let photoLogCSV = "Filename,Date,Time,Latitude,Longitude,Heading,Caption1,Caption2,Caption3,Note\n";
+                const photos = state.photos.filter(p => p.projectId === state.settings.projectId);
+                
+                let photoLogCSV = "Filename,Date,Time,Latitude,Longitude,Heading,Caption1,Caption2,Caption3,Note\n";
                 for (const p of photos) {
                     let blob = await blobToBuffer(p.finalBlob || (p.finalBuffer ? new Blob([p.finalBuffer]) : null));
                     if (blob) {
@@ -625,7 +1088,7 @@
         async function downloadZip(idSet) {
             setProcessing(true, "Zipping...");
             const zip = new JSZip();
-            const targets = idSet ? state.photos.filter(p => idSet.has(p.id)) : state.photos;
+            const targets = idSet ? state.photos.filter(p => idSet.has(p.id)) : state.photos.filter(p => p.projectId === state.settings.projectId);
             if (targets.length === 0) { setProcessing(false); return showAlert("No photos to download."); }
             let csv = "Filename,Date,Lat,Lon,Direction,Note,Cap1,Cap2,Cap3\n";
             for (const p of targets) {
@@ -652,17 +1115,23 @@
         // --- Project Management Logic ---
         async function fetchUserProjects() {
             if(!user) return;
+            // Guard clause if user doesn't have an ID yet
+            if(!user.uid) return;
             const ref = collection(db, 'artifacts', appId, 'users', user.uid, 'projects');
             unsubscribeProjects = onSnapshot(ref, (snap) => {
                 state.userProjects = [];
                 snap.forEach(doc => state.userProjects.push({ ...doc.data(), id: doc.id }));
                 renderProjectList();
+            }, (err) => {
+                 console.warn("Project sync error (expected if permissions not set):", err);
             });
         }
 
         async function createProject() {
             const name = ui.newProjectInput.value.trim();
             if(!name) return;
+            // Guard
+            if (!user) { showAlert("Must be logged in to sync projects."); return; }
             const projectId = name.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase() + '-' + Date.now().toString().slice(-4);
             const ref = doc(db, 'artifacts', appId, 'users', user.uid, 'projects', projectId);
             await setDoc(ref, { name: name, created: Date.now() });
@@ -673,12 +1142,15 @@
         async function switchProject(newPid) {
             state.settings.projectId = newPid;
             localStorage.setItem('fc_pid', newPid);
-            state.photos = [];
-            state.notes = [];
+            // Don't clear arrays, just re-filter view. 
+            // Actually, for performance, we might want to keep everything in memory and just filter render.
+            // The previous logic cleared them, which required a full reload. 
+            // Let's just re-render.
             renderGallery();
             renderNotes();
             updateProjectUI(newPid);
-            await restoreSession();
+            
+            // Re-sync logic for cloud
             if(state.settings.cloudEnabled && user) {
                 if(unsubscribeNotes) unsubscribeNotes();
                 if(unsubscribePhotos) unsubscribePhotos();
@@ -688,6 +1160,7 @@
 
         async function deleteProject(pid) {
             if(!await showConfirm("Remove this project from list? Data will remain in cloud.")) return;
+             if (!user) return;
             const ref = doc(db, 'artifacts', appId, 'users', user.uid, 'projects', pid);
             await deleteDoc(ref);
             if(state.settings.projectId === pid) switchProject("default-project");
@@ -719,10 +1192,12 @@
         // --- Rest of standard logic ---
         function updateAuthUI() {
             if(user) {
-                ui.authStatusContainer.classList.remove('hidden');
-                ui.userEmailDisplay.innerText = user.email;
-                ui.logoutBtn.classList.remove('hidden');
-                ui.sCloudEnable.checked = true; state.settings.cloudEnabled = true;
+                if(!user.isAnonymous) {
+                    ui.authStatusContainer.classList.remove('hidden');
+                    ui.userEmailDisplay.innerText = user.email;
+                    ui.logoutBtn.classList.remove('hidden');
+                    ui.sCloudEnable.checked = true; state.settings.cloudEnabled = true;
+                }
             } else {
                 ui.authStatusContainer.classList.add('hidden');
                 ui.logoutBtn.classList.add('hidden');
@@ -741,10 +1216,13 @@
         async function handleLogout() {
             await signOut(auth);
             state.settings.cloudEnabled = false; ui.sCloudEnable.checked = false; localStorage.setItem('fc_cloud', 'false');
+            // Re-sign in anonymously to maintain DB connection if needed
+            await signInAnonymously(auth);
         }
         function updateCloudUI(status) {
             ui.cloudStatus.className = 'absolute top-1 right-1 w-2 h-2 rounded-full border border-gray-700 ';
             if (status === 'off') { ui.cloudStatus.classList.add('bg-gray-500'); ui.cloudMsg.innerText = "Status: Disabled"; }
+            else if (status === 'offline-network') { ui.cloudStatus.classList.add('bg-red-500'); ui.cloudMsg.innerText = "Status: No Internet"; }
             else if (status === 'on') { ui.cloudStatus.classList.add('bg-green-500'); ui.cloudMsg.innerText = "Status: Connected"; }
             else if (status === 'error') { ui.cloudStatus.classList.add('bg-red-500'); ui.cloudMsg.innerText = "Status: Auth Error"; }
             else if (status === 'sync') { ui.cloudStatus.classList.add('bg-yellow-400', 'animate-pulse'); ui.cloudMsg.innerText = "Status: Syncing..."; }
@@ -843,7 +1321,7 @@
                         renderNotes();
                     }
                 });
-            });
+            }, (err) => console.log(err));
             
             unsubscribePhotos = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'shared_photos'), (snap) => {
                 snap.docChanges().forEach(async (c) => {
@@ -873,7 +1351,7 @@
                         }
                     }
                 });
-            });
+            }, (err) => console.log(err));
         }
 
         // --- Standard Logic ---
@@ -934,206 +1412,7 @@
         function formatGPS(lat, lon) { return (lat && lon) ? `${lat.toFixed(5)}, ${lon.toFixed(5)}` : "No GPS"; }
         function blobToBuffer(blob) { return blob ? blob.arrayBuffer() : Promise.resolve(null); }
         function getAspectFit(imgW, imgH, maxW, maxH) { const ratio = Math.min(maxW / imgW, maxH / imgH); return { w: imgW * ratio, h: imgH * ratio }; }
-
-        // Renderers - Now Filtered by Project ID
-        function renderGallery() { 
-            ui.gallery.innerHTML = '';
-            const filtered = state.photos.filter(p => p.projectId === state.settings.projectId);
-            ui.galleryCount.innerText = filtered.length;
-            filtered.sort((a,b)=>b.id-a.id).forEach(p => {
-                const el = document.createElement('div'); el.className = 'grid-item-aspect bg-black rounded overflow-hidden cursor-pointer select-ring';
-                if(state.isSelectMode && state.selectedIds.has(p.id)) el.classList.add('selected-item');
-                
-                const img = document.createElement('img'); img.src = p.displayUrl; el.appendChild(img);
-                
-                // Add "Pending Upload" icon
-                if (p.synced === false && !p.isCloudPreview) {
-                    const badge = document.createElement('div');
-                    badge.className = 'pending-badge';
-                    badge.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="pending-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>';
-                    el.appendChild(badge);
-                }
-
-                el.onclick = () => { if(state.isSelectMode) { if(state.selectedIds.has(p.id)) state.selectedIds.delete(p.id); else state.selectedIds.add(p.id); renderGallery(); } else openEditor(p.id); };
-                ui.gallery.appendChild(el);
-            });
-        }
-        function renderNotes() {
-            ui.notesList.innerHTML = '';
-            const filtered = state.notes.filter(n => n.projectId === state.settings.projectId);
-            filtered.sort((a,b)=>b.id-a.id).forEach(n => {
-                const div = document.createElement('div'); div.className = 'bg-gray-800 p-3 rounded border border-gray-700 mb-2 relative group';
-                div.innerHTML = `
-                    <div class="flex justify-between text-[10px] text-gray-400"><span>${n.timestamp}</span><span>${n.location}</span></div>
-                    <p class="text-sm text-gray-200 whitespace-pre-wrap">${n.text}</p>
-                    <div class="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                         <button onclick="window.editNote(${n.id})" class="text-blue-400 hover:text-white p-1"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg></button>
-                         <button onclick="window.deleteNote(${n.id})" class="text-red-400 hover:text-red-300 p-1"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></button>
-                    </div>
-                `;
-                ui.notesList.appendChild(div);
-            });
-        }
         
-        function editNote(id) {
-            const note = state.notes.find(n => n.id === id);
-            if (!note) return;
-            state.editingNoteId = id;
-            ui.newNoteInput.value = note.text;
-            ui.addNoteBtn.innerText = "Update Note";
-            ui.cancelNoteEditBtn.classList.remove('hidden');
-            ui.newNoteInput.focus();
-        }
-
-        async function deleteNote(id) {
-             if(!await showConfirm("Delete this note?")) return;
-             await DB.delete('notes', id);
-             state.notes = state.notes.filter(n => n.id !== id);
-             renderNotes();
-        }
-        
-        function resetNoteInput() {
-            state.editingNoteId = null;
-            ui.newNoteInput.value = '';
-            ui.addNoteBtn.innerText = "Add Note";
-            ui.cancelNoteEditBtn.classList.add('hidden');
-        }
-
-        function openEditor(id) { const p = state.photos.find(x => x.id === id); if(p) { state.editingId=id; ui.previewImg.src=p.displayUrl; ui.inputs.c1.value=p.captions.c1||""; ui.inputs.c2.value=p.captions.c2||""; ui.inputs.c3.value=p.captions.c3||""; ui.inputs.meta.value=p.metaNote||""; ui.previewModal.classList.remove('hidden'); } }
-
-        // Core Actions
-        async function processPhotoVisuals(p) {
-            const img = await createImageFromBlob(p.originalBlob || p.finalBlob);
-            const cvs = document.createElement('canvas'); cvs.width = img.width; cvs.height = img.height; const ctx = cvs.getContext('2d');
-            ctx.drawImage(img, 0, 0);
-            if (state.settings.burnIn) {
-                const H = cvs.height; const W = cvs.width; const fs = Math.floor(H / state.settings.fontScale); const pad = Math.floor(fs / 2);
-                ctx.font = `bold ${fs}px Arial, sans-serif`; ctx.fillStyle = '#ffffff'; ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 4; ctx.strokeStyle = '#000000'; ctx.lineWidth = fs / 10; ctx.textBaseline = 'bottom';
-                const dt = (t, x, y, a='left') => { if(!t) return; ctx.textAlign=a; ctx.strokeText(t,x,y); ctx.fillText(t,x,y); };
-                let cY = H - pad; [p.captions.c3, p.captions.c2, p.captions.c1].forEach(t => { if(t){ dt(t, pad, cY); cY -= (fs*1.2); }});
-                ctx.font = `bold ${Math.floor(fs*0.7)}px monospace`; let iY = H - pad; 
-                dt(p.location, W-pad, iY, 'right'); iY -= (fs*0.9); dt(p.timestamp, W-pad, iY, 'right');
-                ctx.textBaseline = 'top'; 
-                const projName = state.userProjects.find(pr=>pr.id===p.projectId)?.name || p.projectId;
-                let tY = pad; if(projName) { dt(projName, pad, tY, 'left'); tY += (fs * 1.2); }
-                dt(`Photo No. ${p.photoNumber}`, pad, tY, 'left');
-            }
-            if (p.displayUrl) URL.revokeObjectURL(p.displayUrl);
-            const final = await new Promise(r => cvs.toBlob(r, 'image/jpeg', state.settings.jpegQ)); 
-            p.finalBlob = final; p.displayUrl = URL.createObjectURL(final);
-        }
-
-        async function handleCapturedBlob(blob) {
-            const currentNum = state.settings.nextNum; state.settings.nextNum++; localStorage.setItem('fc_num', state.settings.nextNum);
-            const photo = { 
-                id: Date.now(), originalBlob: blob, displayUrl: null, captions: { c1:state.settings.defC1, c2:state.settings.defC2, c3:state.settings.defC3 }, 
-                timestamp: new Date().toLocaleString(), location: formatGPS(state.currentLat, state.currentLon), lat: state.currentLat, lon: state.currentLon,
-                projectId: state.settings.projectId, photoNumber: currentNum,
-                synced: false // Initially false
-            };
-            await processPhotoVisuals(photo);
-            
-            // 1. Save Locally FIRST (Prevents onSnapshot race condition duplicates)
-            const safeP = await prepPhotoForSave(photo);
-            await DB.add('photos', safeP); 
-            state.photos.unshift(photo); 
-            renderGallery(); 
-            openEditor(photo.id);
-
-            // 2. Try uploading immediately
-            if (state.settings.cloudEnabled && user) {
-                const previewB64 = await compressForCloud(photo.finalBlob);
-                const cloudData = { ...photo, preview_b64: previewB64, synced: true };
-                delete cloudData.originalBlob; delete cloudData.finalBlob; delete cloudData.displayUrl;
-                const success = await uploadToCloud('shared_photos', photo.id, cloudData);
-                
-                if (success) {
-                    // Update status to synced
-                    photo.synced = true;
-                    safeP.synced = true;
-                    await DB.add('photos', safeP); // Update DB
-                    renderGallery(); // Re-render to remove pending icon
-                }
-            }
-        }
-
-        async function saveNote() {
-            const text = ui.newNoteInput.value.trim(); 
-            if (!text) return;
-
-            if (state.editingNoteId) {
-                // UPDATE EXISTING
-                const note = state.notes.find(n => n.id === state.editingNoteId);
-                if (note) {
-                    note.text = text;
-                    note.synced = false; // Mark for re-sync
-                    
-                    // Update in Arrays/DB
-                    await DB.add('notes', note);
-                    
-                    // Try cloud update
-                    if(state.settings.cloudEnabled && user) {
-                        const success = await uploadToCloud('shared_notes', note.id, { ...note, synced: true });
-                        if(success) {
-                            note.synced = true;
-                            await DB.add('notes', note);
-                        }
-                    }
-                    
-                    renderNotes();
-                    resetNoteInput(); // Clear UI
-                }
-            } else {
-                // CREATE NEW
-                const note = { 
-                    id: Date.now(), 
-                    text: text, 
-                    timestamp: new Date().toLocaleString(), 
-                    location: state.currentLocation || "No GPS", // Fallback just in case
-                    projectId: state.settings.projectId, 
-                    synced: false 
-                };
-                
-                // 1. Save Locally FIRST
-                await DB.add('notes', note); 
-                state.notes.unshift(note); 
-                renderNotes(); 
-                ui.newNoteInput.value = '';
-    
-                // 2. Try upload immediately
-                if(state.settings.cloudEnabled && user) {
-                     const success = await uploadToCloud('shared_notes', note.id, { ...note, synced: true });
-                     if(success) {
-                         note.synced = true;
-                         await DB.add('notes', note);
-                     }
-                }
-            }
-        }
-        
-        function loadSettingsUI() {
-            ui.sAuth.value = state.settings.author; ui.sNum.value = state.settings.nextNum; ui.sC1.value = state.settings.defC1; ui.sC2.value = state.settings.defC2; ui.sC3.value = state.settings.defC3; ui.sBurn.checked = state.settings.burnIn; ui.sFont.value = state.settings.fontScale; ui.sComp.checked = state.settings.compassUi; ui.sPlay.value = state.settings.pdfLayout; ui.sPres.value = state.settings.pdfRes; ui.sImap.checked = state.settings.incMap; ui.sInotes.checked = state.settings.incNotes; ui.sGps.value = state.settings.gpsFmt;
-            if(user) { ui.projectListContainer.classList.remove('hidden'); }
-        }
-
-        function saveSettingsUI() {
-            state.settings.author = ui.sAuth.value; state.settings.nextNum = parseInt(ui.sNum.value); state.settings.defC1 = ui.sC1.value; state.settings.defC2 = ui.sC2.value; state.settings.defC3 = ui.sC3.value; state.settings.burnIn = ui.sBurn.checked; state.settings.fontScale = parseInt(ui.sFont.value); state.settings.compassUi = ui.sComp.checked; state.settings.pdfLayout = parseInt(ui.sPlay.value); state.settings.pdfRes = parseInt(ui.sPres.value); state.settings.incMap = ui.sImap.checked; state.settings.incNotes = ui.sInotes.checked; state.settings.gpsFmt = ui.sGps.value;
-            localStorage.setItem('fc_auth', state.settings.author); localStorage.setItem('fc_num', state.settings.nextNum); localStorage.setItem('fc_c1', state.settings.defC1); localStorage.setItem('fc_c2', state.settings.defC2); localStorage.setItem('fc_c3', state.settings.defC3); localStorage.setItem('fc_burn', state.settings.burnIn); localStorage.setItem('fc_font', state.settings.fontScale); localStorage.setItem('fc_comp', state.settings.compassUi); localStorage.setItem('fc_play', state.settings.pdfLayout); localStorage.setItem('fc_pres', state.settings.pdfRes); localStorage.setItem('fc_imap', state.settings.incMap); localStorage.setItem('fc_inotes', state.settings.incNotes); localStorage.setItem('fc_gps', state.settings.gpsFmt);
-            ui.projectModal.classList.add('hidden');
-        }
-
-        async function restoreSession() {
-            try { 
-                const saved = await DB.getAll('photos'); const notes = await DB.getAll('notes'); 
-                state.photos = []; state.notes = [];
-                for(let p of saved) { 
-                    if(p.finalBuffer) { const b = new Blob([p.finalBuffer],{type:'image/jpeg'}); p.finalBlob=b; p.displayUrl=URL.createObjectURL(b); state.photos.push(p); } 
-                } 
-                state.notes = notes; 
-                renderGallery(); renderNotes(); 
-            } catch(e){} 
-        }
-
         // Event Setup
         function setupEventListeners() {
             ui.projectBtn.onclick = () => { loadSettingsUI(); ui.projectModal.classList.remove('hidden'); };
@@ -1145,16 +1424,35 @@
             ui.loginSubmit.onclick = handleLogin;
             ui.loginCancel.onclick = () => ui.loginModal.classList.add('hidden');
             ui.logoutBtn.onclick = handleLogout;
-            ui.sCloudEnable.onchange = (e) => { if(e.target.checked && !user) { e.target.checked=false; ui.loginModal.classList.remove('hidden'); } else if (!e.target.checked) handleLogout(); };
+            ui.sCloudEnable.onchange = (e) => { 
+                if(e.target.checked && (!user || user.isAnonymous)) { 
+                    e.target.checked=false; ui.loginModal.classList.remove('hidden'); 
+                } else if (!e.target.checked) {
+                    // Do nothing or optional logout
+                }
+            };
 
             ui.snapBtn.onclick = () => ui.nativeInput.click();
             ui.nativeInput.onchange = (e) => { if(e.target.files[0]) handleCapturedBlob(e.target.files[0]); };
             ui.addNoteBtn.onclick = saveNote;
             ui.cancelNoteEditBtn.onclick = resetNoteInput;
 
-            ui.navCamera.onclick = () => { ui.modCamera.classList.remove('hidden'); ui.modNotes.classList.add('hidden'); ui.modMap.classList.add('hidden'); };
-            ui.navNotes.onclick = () => { ui.modCamera.classList.add('hidden'); ui.modNotes.classList.remove('hidden'); ui.modMap.classList.add('hidden'); };
-            ui.navMap.onclick = () => { ui.modCamera.classList.add('hidden'); ui.modNotes.classList.add('hidden'); ui.modMap.classList.remove('hidden'); };
+            ui.navCamera.onclick = () => { 
+                ui.modCamera.classList.remove('hidden'); ui.modNotes.classList.add('hidden'); ui.modMap.classList.add('hidden'); 
+                ui.navCamera.classList.add('nav-active'); ui.navNotes.classList.remove('nav-active'); ui.navMap.classList.remove('nav-active');
+            };
+            ui.navNotes.onclick = () => { 
+                ui.modCamera.classList.add('hidden'); ui.modNotes.classList.remove('hidden'); ui.modMap.classList.add('hidden'); 
+                ui.navCamera.classList.remove('nav-active'); ui.navNotes.classList.add('nav-active'); ui.navMap.classList.remove('nav-active');
+                renderNotes();
+            };
+            ui.navMap.onclick = () => { 
+                ui.modCamera.classList.add('hidden'); 
+                ui.modNotes.classList.add('hidden'); 
+                ui.modMap.classList.remove('hidden');
+                ui.navCamera.classList.remove('nav-active'); ui.navNotes.classList.remove('nav-active'); ui.navMap.classList.add('nav-active');
+                renderMapMarkers(); // Call the renderer when map tab is clicked
+            };
             ui.saveBtn.onclick = async () => { if(state.editingId) { 
                 const p = state.photos.find(ph => ph.id === state.editingId);
                 p.captions.c1=ui.inputs.c1.value; p.captions.c2=ui.inputs.c2.value; p.captions.c3=ui.inputs.c3.value; p.metaNote=ui.inputs.meta.value;
@@ -1178,6 +1476,13 @@
             if(ui.exportPdfGalleryBtn) ui.exportPdfGalleryBtn.onclick = generatePDFReport;
             if(ui.downloadAll) ui.downloadAll.onclick = () => downloadZip(null);
             if(ui.downloadSelected) ui.downloadSelected.onclick = () => downloadZip(state.selectedIds);
+            if(ui.toggleSelect) ui.toggleSelect.onclick = () => {
+                ui.toggleSelect.classList.toggle('bg-gray-700'); ui.toggleSelect.classList.toggle('bg-indigo-600');
+                if(ui.toggleSelect.classList.contains('bg-indigo-600')) ui.selectionToolbar.classList.remove('hidden');
+                else { ui.selectionToolbar.classList.add('hidden'); state.selectedIds.clear(); renderGallery(); }
+            };
+            if(ui.cancelSelectBtn) ui.cancelSelectBtn.onclick = () => { ui.toggleSelect.click(); };
+            
             if(ui.deleteSelected) ui.deleteSelected.onclick = async () => { if(await showConfirm("Delete selected items?")) { for(let id of state.selectedIds) await DB.delete('photos', id); state.photos = state.photos.filter(p=>!state.selectedIds.has(p.id)); state.selectedIds.clear(); renderGallery(); } };
             if(ui.deleteSingleBtn) ui.deleteSingleBtn.onclick = async () => { if(await showConfirm("Delete this photo?")) { await DB.delete('photos', state.editingId); state.photos = state.photos.filter(p=>p.id!==state.editingId); ui.previewModal.classList.add('hidden'); renderGallery(); } };
             if(ui.newVisitBtn) ui.newVisitBtn.onclick = async () => { if(await showConfirm("Reset project?")) { await DB.clear('photos'); await DB.clear('notes'); state.photos=[]; state.notes=[]; state.selectedIds.clear(); state.settings.nextNum=1; localStorage.setItem('fc_num',1); renderGallery(); renderNotes(); loadSettingsUI(); } };
@@ -1222,10 +1527,8 @@
                     const proceed = await showConfirm("High Photo Count Detected.\n\nCreating a JSON backup with this many photos may crash your browser due to memory limits. \n\nWe recommend using 'Download Project (ZIP)' instead.\n\nTry JSON anyway?");
                     if (!proceed) return;
                 }
-
                 setProcessing(true, "Building Backup..."); 
                 await new Promise(r => setTimeout(r, 100));
-
                 try { 
                     const blob = await createBackupBlob(); 
                     const filename = `Backup_${state.settings.projectId}_${Date.now()}.json`;
@@ -1238,6 +1541,12 @@
             };
         }
 
+        // EXPOSE TO GLOBAL
+        window.switchProject = switchProject;
+        window.deleteProject = deleteProject;
+        window.editNote = editNote;
+        window.deleteNote = deleteNote;
+
         window.onload = () => {
             initFirebase();
             initLocation();
@@ -1245,14 +1554,33 @@
             setupDictation();
             setupEventListeners();
             restoreSession();
-            updateProjectUI(state.settings.projectId);
+            // Start compass if supported
+            if (window.DeviceOrientationEvent && typeof window.DeviceOrientationEvent.requestPermission === 'function') {
+                 // Needs gesture
+                 ui.enableCompassBtn.classList.remove('hidden');
+                 ui.enableCompassBtn.onclick = () => {
+                     DeviceOrientationEvent.requestPermission()
+                     .then(resp => {
+                         if (resp === 'granted') {
+                             window.addEventListener('deviceorientation', handleOrientation);
+                             ui.enableCompassBtn.classList.add('hidden');
+                         } else { alert("Compass permission denied"); }
+                     })
+                     .catch(console.error);
+                 };
+            } else {
+                 window.addEventListener('deviceorientation', handleOrientation);
+                 ui.enableCompassBtn.classList.add('hidden');
+            }
         };
 
-        // Expose to global (Moved to end to ensure definitions exist)
-        window.switchProject = switchProject;
-        window.deleteProject = deleteProject;
-        window.editNote = editNote;
-        window.deleteNote = deleteNote;
+        function handleOrientation(e) {
+            if (!state.settings.compassUi) return;
+            let compass = e.webkitCompassHeading || Math.abs(e.alpha - 360);
+            if(compass) {
+                 document.getElementById('compass-text').innerText = Math.round(compass) + "°";
+            }
+        }
     </script>
 </body>
 </html>
