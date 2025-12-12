@@ -403,14 +403,22 @@
         import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
 
         // --- Firebase Config & Init ---
+        // Fallback config if environment variables are missing
         const USER_PROVIDED_CONFIG = { apiKey: "AIzaSyD2jsJTjSlWf3SINS3u4fz3Lu5IYbI6N94", authDomain: "field-cam.firebaseapp.com", projectId: "field-cam", storageBucket: "field-cam.firebasestorage.app", messagingSenderId: "952385597528", appId: "1:952385597528:web:3a5b2011a4cc2b29e41a2d", measurementId: "G-99YLN372F9" };
-        const firebaseConfig = (typeof __firebase_config !== 'undefined' && __firebase_config) ? JSON.parse(__firebase_config) : USER_PROVIDED_CONFIG;
+        
+        let app, auth, db;
+        
+        try {
+            const firebaseConfig = (typeof __firebase_config !== 'undefined' && __firebase_config) ? JSON.parse(__firebase_config) : USER_PROVIDED_CONFIG;
+            app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+        } catch (e) {
+            console.error("Firebase Initialization Failed:", e);
+        }
+        
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-fieldcam';
 
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        
         // --- State Management ---
         let user = null;
         let unsubscribeNotes, unsubscribePhotos, unsubscribeProjects;
@@ -457,24 +465,32 @@
 
         // --- Authentication Flow ---
         async function initAuth() {
-            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                await signInWithCustomToken(auth, __initial_auth_token);
-            } else {
-                await signInAnonymously(auth);
+            if (!auth) return; // Guard if init failed
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (e) {
+                console.error("Auth Error:", e);
+                updateCloudUI('error');
             }
         }
         
-        onAuthStateChanged(auth, (u) => {
-            user = u;
-            updateAuthUI();
-            if(u) {
-                fetchUserProjects();
-                if(state.settings.cloudEnabled) startCloudSync();
-            } else {
-                updateCloudUI('off');
-                if(unsubscribeNotes) unsubscribeNotes(); if(unsubscribePhotos) unsubscribePhotos();
-            }
-        });
+        if (auth) {
+            onAuthStateChanged(auth, (u) => {
+                user = u;
+                updateAuthUI();
+                if(u) {
+                    fetchUserProjects();
+                    if(state.settings.cloudEnabled) startCloudSync();
+                } else {
+                    updateCloudUI('off');
+                    if(unsubscribeNotes) unsubscribeNotes(); if(unsubscribePhotos) unsubscribePhotos();
+                }
+            });
+        }
         
         // --- Core Application Logic ---
 
@@ -509,9 +525,6 @@
                             state.thumbnails.set(p.id, url);
                         } else if (p.finalBlob) {
                             // Fallback for legacy data (generate on fly) but warn
-                             // We won't generate here to avoid startup lag, just use placeholder or generate lazily?
-                             // For now, if no thumb, we might have to use full blob, but that risks crash.
-                             // Let's create a temp thumb if missing
                              const url = URL.createObjectURL(p.finalBlob);
                              state.thumbnails.set(p.id, url);
                         }
@@ -867,6 +880,9 @@
                         state.notes.unshift(d); await DB.add('notes', d); renderNotes();
                     }
                 });
+            }, (error) => {
+                console.error("Notes sync error:", error);
+                updateCloudUI('error');
             });
             
             // Listen for Photos
@@ -901,6 +917,9 @@
                         if(state.editingId !== existing.id) renderGallery();
                     }
                 });
+            }, (error) => {
+                console.error("Photos sync error:", error);
+                updateCloudUI('error');
             });
         }
         
@@ -946,6 +965,7 @@
             dot.className = 'absolute top-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-gray-800 transition-colors ';
             if(status === 'on') { dot.classList.add('bg-green-500'); msg.innerText = "Synced"; }
             else if(status === 'sync') { dot.classList.add('bg-yellow-400'); msg.innerText = "Syncing..."; }
+            else if(status === 'error') { dot.classList.add('bg-red-500'); msg.innerText = "Sync Error"; }
             else { dot.classList.add('bg-gray-500'); msg.innerText = "Offline"; }
         }
         function updateAuthUI() {
@@ -972,13 +992,19 @@
                     };
                     list.appendChild(el);
                 });
-            });
+            }, (error) => { console.error("Project sync error:", error); });
         }
         async function prepPhotoForSave(p) { const b = await (p.finalBlob ? p.finalBlob.arrayBuffer() : null); const t = await (p.thumbnailBlob ? p.thumbnailBlob.arrayBuffer() : null); const s = {...p}; delete s.finalBlob; delete s.thumbnailBlob; s.finalBuffer = b; s.thumbnailBuffer = t; return s; }
 
         // --- Initialization ---
         window.onload = async () => {
-            initAuth(); // Auth first
+            try {
+                // Must ensure auth is ready before other ops
+                await initAuth(); 
+            } catch (e) {
+                console.warn("Initial auth check failed:", e);
+                // Continue to load local data anyway
+            }
             
             // UI Listeners
             ui.snapBtn.onclick = () => ui.nativeInput.click();
