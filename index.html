@@ -220,7 +220,9 @@
             <!-- Cloud Sync Section -->
             <div class="bg-blue-900/30 border border-blue-800/50 rounded-lg p-4 space-y-3">
                 <div class="flex items-center gap-2 mb-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" /></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+                    </svg>
                     <h3 class="text-xs font-bold text-blue-400 uppercase tracking-wider">Cloud Sync</h3>
                 </div>
                 
@@ -261,14 +263,20 @@
                         </div>
                     </div>
                     <button id="manage-projects-btn" class="w-full bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold py-3 rounded border border-gray-600 flex items-center justify-center gap-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                        </svg>
                         Manage Projects
                     </button>
                     <!-- Project List Container (Hidden by default) -->
                     <div id="project-list-container" class="hidden mt-2 space-y-2 border-t border-gray-700 pt-2">
                          <div class="flex gap-2">
                              <input type="text" id="new-project-input" placeholder="New Project Name" class="flex-1 bg-gray-900 text-white text-xs rounded p-2 border border-gray-600">
-                             <button id="add-project-btn" class="bg-blue-600 hover:bg-blue-500 text-white px-3 rounded"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg></button>
+                             <button id="add-project-btn" class="bg-blue-600 hover:bg-blue-500 text-white px-3 rounded">
+                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                                 </svg>
+                             </button>
                          </div>
                          <div id="project-list" class="max-h-40 overflow-y-auto space-y-1">
                              <!-- Projects injected here -->
@@ -280,51 +288,135 @@
             <!-- Project Defaults -->
             <div class="bg-gray-800 rounded-lg p-4 space-y-3">
                 <h3 class="text-xs font-bold text-blue-400 uppercase tracking-wider mb-2">Metadata Defaults</h3>
-                <div><label class="block text-xs text-gray-400 mb-1">Inspector / Author</label><input type="text" id="set-author" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-600 text-sm" placeholder="e.g. Mario LoCoco, P.E."></div>
-                <div class="grid grid-cols-2 gap-3"><div><label class="block text-xs text-gray-400 mb-1">Next Photo #</label><input type="number" id="set-next-num" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-600 text-sm"></div></div>
-                <div class="space-y-2 pt-2 border-t border-gray-700"><p class="text-xs text-gray-500">Default Captions for New Photos</p><input type="text" id="set-def-c1" class="w-full bg-gray-900 text-white rounded p-2 border border-gray-600 text-xs" placeholder="Default Line 1"><input type="text" id="set-def-c2" class="w-full bg-gray-900 text-white rounded p-2 border border-gray-600 text-xs" placeholder="Default Line 2"><input type="text" id="set-def-c3" class="w-full bg-gray-900 text-white rounded p-2 border border-gray-600 text-xs" placeholder="Default Line 3"></div>
+                <div>
+                    <label class="block text-xs text-gray-400 mb-1">Inspector / Author</label>
+                    <input type="text" id="set-author" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-600 text-sm" placeholder="e.g. Mario LoCoco, P.E.">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs text-gray-400 mb-1">Next Photo #</label>
+                        <input type="number" id="set-next-num" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-600 text-sm">
+                    </div>
+                </div>
+                <div class="space-y-2 pt-2 border-t border-gray-700">
+                    <p class="text-xs text-gray-500">Default Captions for New Photos</p>
+                    <input type="text" id="set-def-c1" class="w-full bg-gray-900 text-white rounded p-2 border border-gray-600 text-xs" placeholder="Default Line 1">
+                    <input type="text" id="set-def-c2" class="w-full bg-gray-900 text-white rounded p-2 border border-gray-600 text-xs" placeholder="Default Line 2">
+                    <input type="text" id="set-def-c3" class="w-full bg-gray-900 text-white rounded p-2 border border-gray-600 text-xs" placeholder="Default Line 3">
+                </div>
             </div>
             
             <!-- Branding -->
             <div class="bg-gray-800 rounded-lg p-4 space-y-3">
                 <h3 class="text-xs font-bold text-blue-400 uppercase tracking-wider mb-2">Report Branding</h3>
                 <div class="flex items-center gap-4">
-                    <div class="w-16 h-16 bg-gray-700 rounded border border-gray-600 flex items-center justify-center overflow-hidden"><img id="set-logo-preview" class="w-full h-full object-contain hidden"><span id="set-logo-placeholder" class="text-[10px] text-gray-500">No Logo</span></div>
-                    <div class="flex-1"><label class="block text-xs text-gray-400 mb-1">Company Logo (for PDF)</label><input type="file" id="set-logo-input" accept="image/*" class="w-full text-xs text-gray-400 file:mr-2 file:py-1 file:px-2 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-gray-700 file:text-blue-400 hover:file:bg-gray-600"><button id="clear-logo-btn" class="text-[10px] text-red-400 mt-1 hover:text-red-300 hidden">Remove Logo</button></div>
+                    <div class="w-16 h-16 bg-gray-700 rounded border border-gray-600 flex items-center justify-center overflow-hidden">
+                        <img id="set-logo-preview" class="w-full h-full object-contain hidden">
+                        <span id="set-logo-placeholder" class="text-[10px] text-gray-500">No Logo</span>
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-xs text-gray-400 mb-1">Company Logo (for PDF)</label>
+                        <input type="file" id="set-logo-input" accept="image/*" class="w-full text-xs text-gray-400 file:mr-2 file:py-1 file:px-2 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-gray-700 file:text-blue-400 hover:file:bg-gray-600">
+                        <button id="clear-logo-btn" class="text-[10px] text-red-400 mt-1 hover:text-red-300 hidden">Remove Logo</button>
+                    </div>
                 </div>
             </div>
 
             <!-- Camera & Image -->
             <div class="bg-gray-800 rounded-lg p-4 space-y-4">
                 <h3 class="text-xs font-bold text-blue-400 uppercase tracking-wider mb-2">Camera & Image</h3>
-                <div class="flex items-center justify-between"><span class="text-sm">Use Native Camera App</span><label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" id="set-native-cam" class="sr-only peer"><div class="w-11 h-6 bg-gray-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 peer-checked:bg-blue-600"></div></label></div>
-                <div class="flex items-center justify-between"><span class="text-sm">Burn Info on Photo</span><label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" id="set-burn-in" class="sr-only peer" checked><div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div></label></div>
-                <div class="flex items-center justify-between"><span class="text-sm">Burn Text Size</span><select id="set-font-scale" class="bg-gray-900 text-white text-xs rounded p-2 border border-gray-600"><option value="35">Small</option><option value="25" selected>Medium</option><option value="18">Large</option></select></div>
-                <div class="flex items-center justify-between"><span class="text-sm">Show Compass (In Preview)</span><label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" id="set-compass-ui" class="sr-only peer" checked><div class="w-11 h-6 bg-gray-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 peer-checked:bg-blue-600"></div></label></div>
+                <div class="flex items-center justify-between">
+                    <span class="text-sm">Use Native Camera App</span>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="set-native-cam" class="sr-only peer">
+                        <div class="w-11 h-6 bg-gray-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 peer-checked:bg-blue-600"></div>
+                    </label>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-sm">Burn Info on Photo</span>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="set-burn-in" class="sr-only peer" checked>
+                        <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                    </label>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-sm">Burn Text Size</span>
+                    <select id="set-font-scale" class="bg-gray-900 text-white text-xs rounded p-2 border border-gray-600">
+                        <option value="35">Small</option>
+                        <option value="25" selected>Medium</option>
+                        <option value="18">Large</option>
+                    </select>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-sm">Show Compass (In Preview)</span>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="set-compass-ui" class="sr-only peer" checked>
+                        <div class="w-11 h-6 bg-gray-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 peer-checked:bg-blue-600"></div>
+                    </label>
+                </div>
                 <button id="enable-sensors-btn" class="w-full text-xs bg-gray-700 hover:bg-gray-600 py-2 rounded">Re-Request Compass Permission (iOS)</button>
             </div>
 
             <!-- PDF Settings -->
             <div class="bg-gray-800 rounded-lg p-4 space-y-4">
                 <h3 class="text-xs font-bold text-blue-400 uppercase tracking-wider mb-2">PDF Report Settings</h3>
-                <div class="flex items-center justify-between"><span class="text-sm">Report Title</span><input type="text" id="set-report-title" class="w-32 bg-gray-900 text-white rounded p-1 border border-gray-600 text-xs text-right" value="Field Inspection Report"></div>
-                <div class="flex items-center justify-between"><span class="text-sm">Photos Per Page</span><select id="set-pdf-layout" class="bg-gray-900 text-white text-xs rounded p-2 border border-gray-600"><option value="1">1 Photo (Large)</option><option value="2" selected>2 Photos (3x5)</option><option value="4">4 Photos (Grid)</option></select></div>
-                <div class="flex items-center justify-between"><span class="text-sm">PDF Resolution</span><select id="set-pdf-res" class="bg-gray-900 text-white text-xs rounded p-2 border border-gray-600"><option value="800">Screen (Email)</option><option value="2000" selected>Print (High Res)</option></select></div>
-                <div class="flex items-center justify-between"><span class="text-sm">Include Map Section</span><input type="checkbox" id="set-inc-map" class="w-5 h-5 rounded bg-gray-900 border-gray-600" checked></div>
-                <div class="flex items-center justify-between"><span class="text-sm">Include Field Notes</span><input type="checkbox" id="set-inc-notes" class="w-5 h-5 rounded bg-gray-900 border-gray-600" checked></div>
+                <div class="flex items-center justify-between">
+                    <span class="text-sm">Report Title</span>
+                    <input type="text" id="set-report-title" class="w-32 bg-gray-900 text-white rounded p-1 border border-gray-600 text-xs text-right" value="Field Inspection Report">
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-sm">Photos Per Page</span>
+                    <select id="set-pdf-layout" class="bg-gray-900 text-white text-xs rounded p-2 border border-gray-600">
+                        <option value="1">1 Photo (Large)</option>
+                        <option value="2" selected>2 Photos (3x5)</option>
+                        <option value="4">4 Photos (Grid)</option>
+                    </select>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-sm">PDF Resolution</span>
+                    <select id="set-pdf-res" class="bg-gray-900 text-white text-xs rounded p-2 border border-gray-600">
+                        <option value="800">Screen (Email)</option>
+                        <option value="2000" selected>Print (High Res)</option>
+                    </select>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-sm">Include Map Section</span>
+                    <input type="checkbox" id="set-inc-map" class="w-5 h-5 rounded bg-gray-900 border-gray-600" checked>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-sm">Include Field Notes</span>
+                    <input type="checkbox" id="set-inc-notes" class="w-5 h-5 rounded bg-gray-900 border-gray-600" checked>
+                </div>
             </div>
 
             <!-- App Preferences -->
             <div class="bg-gray-800 rounded-lg p-4 space-y-4">
                 <h3 class="text-xs font-bold text-blue-400 uppercase tracking-wider mb-2">App Preferences</h3>
-                <div class="flex items-center justify-between"><span class="text-sm">Temperature Unit</span><div class="flex bg-gray-900 rounded p-1"><button id="set-unit-c" class="px-3 py-1 rounded text-xs">°C</button><button id="set-unit-f" class="px-3 py-1 rounded text-xs bg-blue-600 text-white">°F</button></div></div>
-                <div class="flex items-center justify-between"><span class="text-sm">GPS Format</span><select id="set-gps-fmt" class="bg-gray-900 text-white text-xs rounded p-2 border border-gray-600"><option value="dec" selected>Decimal (40.7128)</option><option value="dms">DMS (40° 42' N)</option></select></div>
+                <div class="flex items-center justify-between">
+                    <span class="text-sm">Temperature Unit</span>
+                    <div class="flex bg-gray-900 rounded p-1">
+                        <button id="set-unit-c" class="px-3 py-1 rounded text-xs">°C</button>
+                        <button id="set-unit-f" class="px-3 py-1 rounded text-xs bg-blue-600 text-white">°F</button>
+                    </div>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-sm">GPS Format</span>
+                    <select id="set-gps-fmt" class="bg-gray-900 text-white text-xs rounded p-2 border border-gray-600">
+                        <option value="dec" selected>Decimal (40.7128)</option>
+                        <option value="dms">DMS (40° 42' N)</option>
+                    </select>
+                </div>
             </div>
 
             <!-- Data Management -->
             <div class="bg-gray-800 rounded-lg p-4">
                 <h3 class="text-xs font-bold text-blue-400 uppercase tracking-wider mb-2">Data Management</h3>
-                <button id="download-project-btn" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded mb-3 shadow-lg flex items-center justify-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>Download Project (ZIP)</button>
+                <button id="download-project-btn" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded mb-3 shadow-lg flex items-center justify-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Download Project (ZIP)
+                </button>
                 <div class="flex gap-2">
                     <button id="backup-btn" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-3 rounded">Save JSON</button>
                     <button id="new-visit-btn" class="flex-1 bg-red-900 hover:bg-red-800 text-white text-xs font-bold py-3 rounded">Reset</button>
@@ -339,29 +431,76 @@
     <!-- Modals -->
     <div id="batch-modal" class="fixed inset-0 z-50 bg-black/95 hidden flex flex-col justify-end md:justify-center p-4">
         <div class="bg-gray-800 rounded-t-xl md:rounded-xl w-full max-w-md p-6 space-y-4 shadow-2xl border border-gray-700 mx-auto">
-            <div class="flex justify-between items-center mb-2"><h3 class="text-lg font-bold text-white">Batch Edit</h3><span class="text-xs text-gray-400 bg-gray-700 px-2 py-1 rounded" id="batch-count-label">0 Selected</span></div>
+            <div class="flex justify-between items-center mb-2">
+                <h3 class="text-lg font-bold text-white">Batch Edit</h3>
+                <span class="text-xs text-gray-400 bg-gray-700 px-2 py-1 rounded" id="batch-count-label">0 Selected</span>
+            </div>
             <div class="space-y-3 max-h-[60vh] overflow-y-auto">
                 <p class="text-[10px] text-gray-500 italic">Enter text to overwrite. Leave blank to keep existing data.</p>
-                <div><label class="block text-xs uppercase text-gray-400 font-bold mb-1">Caption 1 (Top)</label><input type="text" id="group-caption-1" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-600 text-sm"></div>
-                <div><label class="block text-xs uppercase text-gray-400 font-bold mb-1">Caption 2 (Middle)</label><input type="text" id="group-caption-2" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-600 text-sm"></div>
-                <div><label class="block text-xs uppercase text-gray-400 font-bold mb-1">Caption 3 (Bottom)</label><input type="text" id="group-caption-3" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-600 text-sm"></div>
-                <div><label class="block text-xs uppercase text-gray-400 font-bold mb-1 flex justify-between"><span>Notes (Metadata)</span><button id="group-mic-btn" class="text-blue-400 hover:text-white">Mic</button></label><textarea id="group-notes" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-600 text-sm h-20 resize-none"></textarea></div>
+                <div>
+                    <label class="block text-xs uppercase text-gray-400 font-bold mb-1">Caption 1 (Top)</label>
+                    <input type="text" id="group-caption-1" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-600 text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs uppercase text-gray-400 font-bold mb-1">Caption 2 (Middle)</label>
+                    <input type="text" id="group-caption-2" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-600 text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs uppercase text-gray-400 font-bold mb-1">Caption 3 (Bottom)</label>
+                    <input type="text" id="group-caption-3" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-600 text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs uppercase text-gray-400 font-bold mb-1 flex justify-between">
+                        <span>Notes (Metadata)</span>
+                        <button id="group-mic-btn" class="text-blue-400 hover:text-white">Mic</button>
+                    </label>
+                    <textarea id="group-notes" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-600 text-sm h-20 resize-none"></textarea>
+                </div>
             </div>
-            <div class="flex gap-2 pt-2"><button id="cancel-batch-btn" class="flex-1 bg-gray-700 text-white font-bold py-3 rounded text-sm">Cancel</button><button id="apply-batch-btn" class="flex-1 bg-blue-600 text-white font-bold py-3 rounded text-sm">Apply</button></div>
+            <div class="flex gap-2 pt-2">
+                <button id="cancel-batch-btn" class="flex-1 bg-gray-700 text-white font-bold py-3 rounded text-sm">Cancel</button>
+                <button id="apply-batch-btn" class="flex-1 bg-blue-600 text-white font-bold py-3 rounded text-sm">Apply</button>
+            </div>
         </div>
     </div>
     
     <div id="preview-modal" class="fixed inset-0 z-50 bg-black/95 hidden flex flex-col">
         <div class="flex justify-between items-center p-4 bg-gray-900 border-b border-gray-800 shrink-0 safe-top-padding">
-            <div class="flex items-center gap-3"><button id="close-preview-btn" class="text-gray-400 p-2 hover:text-white transition-colors"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></button></div>
-            <button id="preview-delete-btn" class="text-red-500 p-2 hover:bg-red-900/30 rounded-full transition-colors"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+            <div class="flex items-center gap-3">
+                <button id="close-preview-btn" class="text-gray-400 p-2 hover:text-white transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <button id="preview-delete-btn" class="text-red-500 p-2 hover:bg-red-900/30 rounded-full transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+            </button>
         </div>
         <div class="flex-1 overflow-y-auto p-4 space-y-6">
-            <div class="bg-black rounded-lg border border-gray-800 flex justify-center items-center overflow-hidden h-64 md:h-80 shrink-0 relative"><img id="preview-img" src="" class="h-full w-auto object-contain"></div>
+            <div class="bg-black rounded-lg border border-gray-800 flex justify-center items-center overflow-hidden h-64 md:h-80 shrink-0 relative">
+                <img id="preview-img" src="" class="h-full w-auto object-contain">
+            </div>
             <div class="space-y-4 max-w-lg mx-auto">
-                <div class="space-y-2"><label class="block text-xs uppercase text-gray-500 font-bold">Burn-in Captions</label><input type="text" id="modal-caption-1" class="w-full bg-gray-800 text-white rounded p-3 border border-gray-700 text-sm"><input type="text" id="modal-caption-2" class="w-full bg-gray-800 text-white rounded p-3 border border-gray-700 text-sm"><input type="text" id="modal-caption-3" class="w-full bg-gray-800 text-white rounded p-3 border border-gray-700 text-sm"></div>
-                <div><label class="block text-xs uppercase text-gray-500 font-bold mb-1 flex justify-between"><span>Notes</span><button id="single-mic-btn" class="text-blue-400">Mic</button></label><textarea id="modal-metadata" class="w-full bg-gray-800 text-white rounded p-3 border border-gray-700 text-sm h-20"></textarea></div>
-                <div class="grid grid-cols-2 gap-3 pt-4 border-t border-gray-800 mb-8"><button id="preview-download-btn" class="bg-gray-800 text-white font-semibold py-3 rounded border border-gray-700 hover:bg-gray-700">Download</button><button id="save-photo-btn" class="bg-blue-600 text-white font-bold py-3 rounded hover:bg-blue-500 shadow-lg">Save</button></div>
+                <div class="space-y-2">
+                    <label class="block text-xs uppercase text-gray-500 font-bold">Burn-in Captions</label>
+                    <input type="text" id="modal-caption-1" class="w-full bg-gray-800 text-white rounded p-3 border border-gray-700 text-sm">
+                    <input type="text" id="modal-caption-2" class="w-full bg-gray-800 text-white rounded p-3 border border-gray-700 text-sm">
+                    <input type="text" id="modal-caption-3" class="w-full bg-gray-800 text-white rounded p-3 border border-gray-700 text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs uppercase text-gray-500 font-bold mb-1 flex justify-between">
+                        <span>Notes</span>
+                        <button id="single-mic-btn" class="text-blue-400">Mic</button>
+                    </label>
+                    <textarea id="modal-metadata" class="w-full bg-gray-800 text-white rounded p-3 border border-gray-700 text-sm h-20"></textarea>
+                </div>
+                <div class="grid grid-cols-2 gap-3 pt-4 border-t border-gray-800 mb-8">
+                    <button id="preview-download-btn" class="bg-gray-800 text-white font-semibold py-3 rounded border border-gray-700 hover:bg-gray-700">Download</button>
+                    <button id="save-photo-btn" class="bg-blue-600 text-white font-bold py-3 rounded hover:bg-blue-500 shadow-lg">Save</button>
+                </div>
             </div>
         </div>
     </div>
@@ -371,8 +510,14 @@
         <div class="bg-gray-800 rounded-xl w-full max-w-sm p-6 border border-gray-700 shadow-2xl">
             <h3 class="text-xl font-bold text-white mb-4">Cloud Login</h3>
             <div class="space-y-3">
-                <div><label class="block text-xs text-gray-400 mb-1">Email</label><input type="email" id="login-email" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-600 text-sm"></div>
-                <div><label class="block text-xs text-gray-400 mb-1">Password</label><input type="password" id="login-password" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-600 text-sm"></div>
+                <div>
+                    <label class="block text-xs text-gray-400 mb-1">Email</label>
+                    <input type="email" id="login-email" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-600 text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-400 mb-1">Password</label>
+                    <input type="password" id="login-password" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-600 text-sm">
+                </div>
                 <div id="login-error" class="text-red-500 text-xs hidden">Invalid credentials</div>
                 <button id="login-submit-btn" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded text-sm mt-2">Log In</button>
                 <button id="login-cancel-btn" class="w-full bg-transparent text-gray-400 text-xs py-2 hover:text-white">Cancel</button>
@@ -386,12 +531,21 @@
 
     <div id="custom-alert-overlay" class="fixed inset-0 z-[100] custom-modal-overlay hidden flex items-center justify-center p-4 animate-fade-in">
         <div class="bg-gray-800 rounded-lg shadow-2xl max-w-sm w-full border border-gray-700 transform transition-all">
-            <div class="p-5"><h3 class="text-lg font-medium text-white mb-2" id="alert-title">Notice</h3><p class="text-gray-300 text-sm" id="alert-message">Message goes here.</p></div>
-            <div class="p-4 border-t border-gray-700 flex justify-end gap-2"><button id="alert-cancel-btn" class="hidden px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded transition-colors">Cancel</button><button id="alert-ok-btn" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded shadow transition-colors">OK</button></div>
+            <div class="p-5">
+                <h3 class="text-lg font-medium text-white mb-2" id="alert-title">Notice</h3>
+                <p class="text-gray-300 text-sm" id="alert-message">Message goes here.</p>
+            </div>
+            <div class="p-4 border-t border-gray-700 flex justify-end gap-2">
+                <button id="alert-cancel-btn" class="hidden px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded transition-colors">Cancel</button>
+                <button id="alert-ok-btn" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded shadow transition-colors">OK</button>
+            </div>
         </div>
     </div>
     
-    <div id="processing-overlay" class="absolute inset-0 z-50 bg-black/80 flex flex-col items-center justify-center hidden backdrop-blur-sm"><div class="loader mb-4"></div><p id="processing-text" class="text-white font-semibold">Processing...</p></div>
+    <div id="processing-overlay" class="absolute inset-0 z-50 bg-black/80 flex flex-col items-center justify-center hidden backdrop-blur-sm">
+        <div class="loader mb-4"></div>
+        <p id="processing-text" class="text-white font-semibold">Processing...</p>
+    </div>
 
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js';
@@ -1660,6 +1814,7 @@
             initCamera();
             setupDictation();
             setupEventListeners();
+            // restoreSession() and updateProjectUI() are now called inside the onAuthStateChanged listener for reliability.
         };
     </script>
 </body>
