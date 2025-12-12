@@ -85,6 +85,12 @@
             background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
             padding: 8px 4px 4px 4px;
         }
+        /* Tag Styling */
+        .note-tag {
+            display: inline-flex; align-items: center; background-color: #3b82f630; 
+            color: #60a5fa; border: 1px solid #3b82f650; padding: 2px 6px; 
+            border-radius: 9999px; font-size: 10px; font-weight: 500; margin-right: 4px;
+        }
     </style>
 </head>
 <body class="bg-gray-900 text-white flex flex-col overflow-hidden h-screen">
@@ -191,6 +197,9 @@
         </div>
         <div id="notes-list" class="flex-1 overflow-y-auto p-4 space-y-3"><div id="notes-placeholder" class="text-center text-gray-500 mt-10 text-sm">No notes recorded yet.</div></div>
         <div class="p-4 bg-gray-800 border-t border-gray-700">
+            <!-- NEW TAGS INPUT -->
+            <input type="text" id="new-note-tags" class="w-full bg-gray-900 text-white rounded-lg p-3 border border-gray-600 focus:border-blue-500 outline-none text-sm resize-none mb-2" placeholder="Tags (e.g., N-Abutment, Cracks, Deck-B)">
+            
             <div class="relative"><textarea id="new-note-input" class="w-full bg-gray-900 text-white rounded-lg p-3 border border-gray-600 focus:border-blue-500 outline-none text-sm resize-none pr-10" rows="3" placeholder="Type observation..."></textarea><button id="note-mic-btn" class="absolute right-2 bottom-2 text-gray-400 hover:text-blue-400 p-2"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg></button></div>
             <div class="flex gap-2 mt-2"><button id="cancel-note-edit-btn" class="hidden flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 rounded-lg text-sm">Cancel</button><button id="add-note-btn" class="flex-[3] bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg text-sm transition-colors">Add Note</button></div>
         </div>
@@ -272,6 +281,7 @@
                     <div id="project-list-container" class="hidden mt-2 space-y-2 border-t border-gray-700 pt-2">
                          <div class="flex gap-2">
                              <input type="text" id="new-project-input" placeholder="New Project Name" class="flex-1 bg-gray-900 text-white text-xs rounded p-2 border border-gray-600">
+                             <input type="text" id="new-project-id" placeholder="Project ID (Required)" class="flex-1 bg-gray-900 text-white text-xs rounded p-2 border border-gray-600">
                              <button id="add-project-btn" class="bg-blue-600 hover:bg-blue-500 text-white px-3 rounded">
                                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -454,7 +464,7 @@
                         <span>Notes (Metadata)</span>
                         <button id="group-mic-btn" class="text-blue-400 hover:text-white">Mic</button>
                     </label>
-                    <textarea id="group-notes" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-600 text-sm h-20 resize-none"></textarea>
+                    <textarea id="group-notes" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-700 text-sm h-20 resize-none"></textarea>
                 </div>
             </div>
             <div class="flex gap-2 pt-2">
@@ -508,7 +518,7 @@
     <!-- Login Modal -->
     <div id="login-modal" class="fixed inset-0 z-[60] bg-black/95 hidden flex items-center justify-center p-4">
         <div class="bg-gray-800 rounded-xl w-full max-w-sm p-6 border border-gray-700 shadow-2xl">
-            <h3 class="text-xl font-bold text-white mb-4">Cloud Login</h3>
+            <h3 class="text-xl font-bold text-white mb-4" id="login-modal-title">Cloud Login</h3>
             <div class="space-y-3">
                 <div>
                     <label class="block text-xs text-gray-400 mb-1">Email</label>
@@ -520,15 +530,12 @@
                 </div>
                 <div id="login-error" class="text-red-500 text-xs hidden">Invalid credentials</div>
                 <button id="login-submit-btn" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded text-sm mt-2">Log In</button>
-                <button id="login-cancel-btn" class="w-full bg-transparent text-gray-400 text-xs py-2 hover:text-white">Cancel</button>
+                <button id="toggle-signup-btn" class="w-full bg-transparent text-blue-400 text-xs py-2 hover:text-white transition-colors">Need an account? Sign Up</button>
             </div>
         </div>
     </div>
     
-    <!-- External Config Modal (NEW) - REMOVED -->
-    <!-- The config modal is hidden since config is hardcoded -->
-
-
+    <!-- Custom Alert/Confirm Modals -->
     <div id="custom-alert-overlay" class="fixed inset-0 z-[100] custom-modal-overlay hidden flex items-center justify-center p-4 animate-fade-in">
         <div class="bg-gray-800 rounded-lg shadow-2xl max-w-sm w-full border border-gray-700 transform transition-all">
             <div class="p-5">
@@ -549,8 +556,8 @@
 
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js';
-        import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signInWithCustomToken, signOut, signInAnonymously } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
-        import { getFirestore, collection, doc, setDoc, getDoc, deleteDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
+        import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signInWithCustomToken, signOut, signInAnonymously, createUserWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
+        import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
 
         // --- CONFIG ---
         // Hardcoded Firebase Config for deployment portability
@@ -566,9 +573,6 @@
 
         let app, auth, db, user, unsubscribeNotes, unsubscribePhotos, unsubscribeProjects;
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-fieldcam';
-
-        // Variable to store the manually entered config for external use (now primarily for overriding hardcoded or Canvas config)
-        let manualFirebaseConfig = null;
 
         async function initFirebase() {
             let config = null;
@@ -591,17 +595,14 @@
             if (localStorage.getItem('fc_firebase_config')) {
                  try {
                      config = JSON.parse(localStorage.getItem('fc_firebase_config'));
-                     manualFirebaseConfig = config;
                  } catch (e) {
                      console.error("Local Firebase config parsing failed:", e);
                      localStorage.removeItem('fc_firebase_config');
                  }
             }
 
-
             // 4. Final check before initialization
             if (!config || !config.apiKey) {
-                 // If we somehow get here without config, initialization will fail.
                  console.error("Critical: No Firebase configuration available.");
                  showAlert("Firebase initialization failed. Check console for details.");
                  return; // Halt initialization
@@ -640,10 +641,8 @@
                         if(unsubscribeNotes) unsubscribeNotes();
                         if(unsubscribePhotos) unsubscribePhotos();
                     }
-                    // Final UI updates after auth is ready
-                    restoreSession();
-                    updateProjectUI(state.settings.projectId);
                 });
+
             } catch (e) { 
                 console.error("Firebase Init Error", e); 
                 showAlert("Firebase initialization failed. Check console for details.");
@@ -660,11 +659,9 @@
             });
         }
         
-        // Removed handleConfigSubmit as the config modal is no longer used/needed.
-
         // --- Globals ---
         const DB = {
-            name: 'FieldCamDB', version: 3, 
+            name: 'FieldCamDB', version: 5, // FIXED version number to 5
             open: function() { return new Promise((res, rej) => { const req = indexedDB.open(this.name, this.version); req.onupgradeneeded = (e) => { const db = e.target.result; if (!db.objectStoreNames.contains('photos')) db.createObjectStore('photos', { keyPath: 'id' }); if (!db.objectStoreNames.contains('notes')) db.createObjectStore('notes', { keyPath: 'id' }); }; req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error); }); },
             add: async function(s, o) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readwrite'); tx.objectStore(s).put(o); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); },
             getAll: async function(s) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readonly'); const req = tx.objectStore(s).getAll(); req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error); }); },
@@ -698,11 +695,13 @@
             loginModal: document.getElementById('login-modal'), loginEmail: document.getElementById('login-email'), loginPass: document.getElementById('login-password'), loginSubmit: document.getElementById('login-submit-btn'), loginCancel: document.getElementById('login-cancel-btn'), loginError: document.getElementById('login-error'),
             authStatusContainer: document.getElementById('auth-status-container'), userEmailDisplay: document.getElementById('user-email-display'), logoutBtn: document.getElementById('logout-btn'),
             loginManualBtn: document.getElementById('login-manual-btn'),
-            
-            // Note: config modal elements removed from HTML and thus removed from UI references too.
+            loginModalTitle: document.getElementById('login-modal-title'), toggleSignupBtn: document.getElementById('toggle-signup-btn'), // New UI elements for Sign Up
 
             // Project UI
             projectListContainer: document.getElementById('project-list-container'), projectList: document.getElementById('project-list'), manageProjectsBtn: document.getElementById('manage-projects-btn'), addProjectBtn: document.getElementById('add-project-btn'), newProjectInput: document.getElementById('new-project-input'), currentProjectLabel: document.getElementById('current-project-label'),
+            // NEW: Project ID Input (for adding new project)
+            newProjectIdInput: document.getElementById('new-project-id'), 
+
             // Core
             modCamera: document.getElementById('module-camera'), modNotes: document.getElementById('module-notes'), modMap: document.getElementById('module-map'), navCamera: document.getElementById('nav-camera'), navNotes: document.getElementById('nav-notes'), navMap: document.getElementById('nav-map'),
             video: document.getElementById('video'), canvas: document.getElementById('canvas'), snapBtn: document.getElementById('snap'), gallery: document.getElementById('gallery'), galleryCount: document.getElementById('gallery-count'), locationText: document.getElementById('location-text'),
@@ -758,7 +757,6 @@
                 renderGallery();
                 renderNotes();
                 
-                // If cloud is enabled, sync might trigger later via auth state listener
             } catch(e) { console.error("Restore failed", e); }
             finally { setProcessing(false); }
         }
@@ -854,6 +852,12 @@
             state.notes.forEach(n => {
                 const div = document.createElement('div');
                 div.className = "bg-gray-800 p-3 rounded border border-gray-700 flex justify-between group";
+                
+                // Construct tag list HTML
+                const tagHtml = (n.tags || [])
+                    .map(tag => `<span class="note-tag">${tag.replace(/-/g, ' / ')}</span>`)
+                    .join('');
+
                 div.innerHTML = `
                      <div class="flex-1 pr-2">
                          <div class="flex items-center gap-2 mb-1">
@@ -861,6 +865,7 @@
                              ${!n.synced ? '<span class="text-[9px] text-yellow-500">Unsynced</span>' : ''}
                          </div>
                          <p class="text-[10px] text-gray-500 mb-1">${n.location}</p>
+                         ${tagHtml ? `<div class="mb-2">${tagHtml}</div>` : ''}
                          <p class="text-sm text-gray-200 whitespace-pre-wrap">${n.text}</p>
                      </div>
                      <div class="flex flex-col gap-2 justify-center opacity-70">
@@ -1113,7 +1118,7 @@
         }
 
         function saveSettingsUI() {
-            state.settings.author = ui.sAuth.value; state.settings.nextNum = parseInt(ui.sNum.value); state.settings.defC1 = ui.sC1.value; state.settings.defC2 = ui.sC2.value; state.settings.defC3 = ui.sC3.value; state.settings.burnIn = ui.sBurn.checked; state.settings.fontScale = parseInt(ui.sFont.value); state.settings.compassUi = ui.sComp.checked; state.settings.pdfLayout = parseInt(ui.sPlay.value); state.settings.pdfRes = parseInt(ui.sPres.value); state.settings.incMap = ui.sImap.checked; state.settings.incNotes = ui.sInotes.checked; state.settings.gpsFmt = ui.sGps.value;
+            state.settings.author = ui.sAuth.value; state.settings.nextNum = parseInt(ui.sNum.value); state.settings.defC1 = ui.sC1.value; state.settings.defC2 = ui.sC2.value; state.settings.defC3 = ui.sC3.value; state.settings.burnIn = ui.sBurn.checked; state.settings.fontScale = parseInt(ui.sFont.value); state.settings.compassUi = ui.sComp.checked; state.settings.pdfLayout = parseInt(ui.sPlay.value); state.settings.pdfRes = parseInt(ui.sPres.value); state.settings.incMap = ui.sImap.checked; state.settings.incNotes = ui.sInotes.checked; ui.sGps.value = state.settings.gpsFmt;
             localStorage.setItem('fc_auth', state.settings.author); localStorage.setItem('fc_num', state.settings.nextNum); localStorage.setItem('fc_c1', state.settings.defC1); localStorage.setItem('fc_c2', state.settings.defC2); localStorage.setItem('fc_c3', state.settings.defC3); localStorage.setItem('fc_burn', state.settings.burnIn); localStorage.setItem('fc_font', state.settings.fontScale); localStorage.setItem('fc_comp', state.settings.compassUi); localStorage.setItem('fc_play', state.settings.pdfLayout); localStorage.setItem('fc_pres', state.settings.pdfRes); localStorage.setItem('fc_imap', state.settings.incMap); localStorage.setItem('fc_inotes', state.settings.incNotes); localStorage.setItem('fc_gps', state.settings.gpsFmt);
             ui.projectModal.classList.add('hidden');
         }
@@ -1309,13 +1314,28 @@
         async function createProject() {
             if (!user) return showAlert("You must be logged in with a named account to create new projects.");
             const name = ui.newProjectInput.value.trim();
-            if(!name) return;
-            const projectId = name.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase() + '-' + Date.now().toString().slice(-4);
-             // Path: /artifacts/{appId}/users/{userId}/projects/{projectId}
+            const idInput = ui.newProjectIdInput.value.trim();
+            
+            // Generate Project ID if not provided, otherwise clean the input
+            const projectId = idInput || name.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase() + '-' + Date.now().toString().slice(-4);
+
+
+            if (!name) {
+                return showAlert("Please provide a Project Name.");
+            }
+
+            // Check if Project ID already exists in user's list
+            if (state.userProjects.some(p => p.id === projectId)) {
+                 return showAlert(`Project ID "${projectId}" is already saved in your list.`);
+            }
+
+            // Path: /artifacts/{appId}/users/{userId}/projects/{projectId}
             const ref = doc(db, 'artifacts', appId, 'users', user.uid, 'projects', projectId);
-            await setDoc(ref, { name: name, created: Date.now() });
+            await setDoc(ref, { name: name, id: projectId, created: Date.now() });
+            
             ui.newProjectInput.value = '';
-            switchProject(projectId);
+            ui.newProjectIdInput.value = '';
+            switchProject(projectId); // Switches the active project immediately
         }
 
         async function switchProject(newPid) {
@@ -1341,10 +1361,22 @@
         }
 
         async function deleteProject(pid) {
-            if(!await showConfirm("Remove this project from list? Data will remain in cloud.")) return;
-            const ref = doc(db, 'artifacts', appId, 'users', user.uid, 'projects', pid);
-            await deleteDoc(ref);
-            if(state.settings.projectId === pid) switchProject("default-project");
+            if(!await showConfirm(`Delete project "${pid}" from your saved list? This does NOT delete shared cloud data.`)) return;
+            
+            // Delete from private user list in Firestore
+            if (user && db) {
+                 const ref = doc(db, 'artifacts', appId, 'users', user.uid, 'projects', pid);
+                 await deleteDoc(ref);
+            }
+            
+            // If the deleted project was the active one, switch to default
+            if(state.settings.projectId === pid) {
+                 switchProject("default-project");
+            } else {
+                 // Force re-render of project list after local deletion (Firestore snapshot usually handles this)
+                 state.userProjects = state.userProjects.filter(p => p.id !== pid);
+                 renderProjectList();
+            }
         }
 
         function renderProjectList() {
@@ -1353,10 +1385,21 @@
                 const isActive = p.id === state.settings.projectId;
                 const div = document.createElement('div');
                 div.className = `flex justify-between items-center p-2 rounded ${isActive ? 'bg-blue-900/40 border border-blue-700' : 'bg-gray-700 hover:bg-gray-600'}`;
+                
+                const deleteBtnHtml = `
+                    <button onclick="window.deleteProject('${p.id}')" class="text-red-400 hover:text-red-300 p-1" title="Delete from saved list">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                    </button>
+                `;
+
                 div.innerHTML = `
-                    <span class="text-sm text-white truncate cursor-pointer flex-1" onclick="window.switchProject('${p.id}')">${p.name}</span>
+                    <span class="text-sm text-white truncate cursor-pointer flex-1" onclick="window.switchProject('${p.id}')">
+                        ${p.name} <span class="text-gray-400 font-mono text-[10px]">(${p.id})</span>
+                    </span>
                     ${isActive ? '<span class="text-[10px] text-blue-400 mr-2">Active</span>' : ''}
-                    <button class="text-red-400 hover:text-red-300 p-1" onclick="window.deleteProject('${p.id}')"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+                    ${deleteBtnHtml}
                 `;
                 ui.projectList.appendChild(div);
             });
@@ -1364,6 +1407,7 @@
         }
 
         function updateProjectUI(pid) {
+            // Looks up Project Name from saved projects or defaults to the ID
             const p = state.userProjects.find(x => x.id === pid);
             const name = p ? p.name : pid;
             ui.currentProjectLabel.innerText = name;
@@ -1395,20 +1439,58 @@
             }
             updateCloudUI(user ? 'on' : 'off');
         }
-        async function handleLogin() {
-            try {
-                ui.loginSubmit.textContent = "Logging in...";
-                // Determine if this is a login or sign-up attempt based on whether we are trying to create an account
-                // NOTE: This application does not currently implement a sign-up toggle in the modal, 
-                // so we rely on signInWithEmailAndPassword which works for existing users.
-                
-                await signInWithEmailAndPassword(auth, ui.loginEmail.value, ui.loginPass.value);
+        
+        // Helper function to toggle login modal mode
+        function setLoginMode(mode) {
+            // Check if essential elements exist before proceeding
+            if (!ui.loginModalTitle || !ui.loginSubmit || !ui.toggleSignupBtn) {
+                 console.error("Login UI elements not found. Skipping setLoginMode initialization.");
+                 return;
+            }
 
+            if (mode === 'login') {
+                ui.loginModalTitle.textContent = "Cloud Login";
+                ui.loginSubmit.textContent = "Log In";
+                ui.toggleSignupBtn.innerHTML = "Need an account? Sign Up";
+                ui.toggleSignupBtn.onclick = () => setLoginMode('signup');
+                ui.loginSubmit.dataset.mode = 'login';
+            } else {
+                ui.loginModalTitle.textContent = "Create Account";
+                ui.loginSubmit.textContent = "Sign Up";
+                ui.toggleSignupBtn.innerHTML = "Already have an account? Log In";
+                ui.toggleSignupBtn.onclick = () => setLoginMode('login');
+                ui.loginSubmit.dataset.mode = 'signup';
+            }
+            ui.loginError.classList.add('hidden'); // Clear error on mode change
+        }
+
+        async function handleLogin() {
+            const email = ui.loginEmail.value;
+            const password = ui.loginPass.value;
+            const mode = ui.loginSubmit.dataset.mode;
+            
+            if (!email || !password) return;
+
+            ui.loginSubmit.textContent = "Processing...";
+            ui.loginError.classList.add('hidden');
+
+            try {
+                if (mode === 'signup') {
+                    await createUserWithEmailAndPassword(auth, email, password);
+                } else {
+                    await signInWithEmailAndPassword(auth, email, password);
+                }
+
+                // If successful, the onAuthStateChanged listener handles the rest
                 ui.loginModal.classList.add('hidden');
             } catch (error) {
-                ui.loginError.textContent = error.message; ui.loginError.classList.remove('hidden');
-            } finally { ui.loginSubmit.textContent = "Log In"; }
+                ui.loginError.textContent = error.message;
+                ui.loginError.classList.remove('hidden');
+            } finally { 
+                ui.loginSubmit.textContent = mode === 'signup' ? "Sign Up" : "Log In";
+            }
         }
+        
         async function handleLogout() {
             // Note: Cannot sign out the anonymous user provided by Canvas, but we can disable cloud sync locally.
             state.settings.cloudEnabled = false; ui.sCloudEnable.checked = false; localStorage.setItem('fc_cloud', 'false');
@@ -1642,21 +1724,29 @@
         
         // Event Setup
         function setupEventListeners() {
-            // FIX: Ensure projectBtn is properly wired up
-            ui.projectBtn.onclick = () => { loadSettingsUI(); ui.projectModal.classList.remove('hidden'); };
+            // Check essential button existence before attaching listeners
+            if (ui.projectBtn) ui.projectBtn.onclick = () => { loadSettingsUI(); ui.projectModal.classList.remove('hidden'); };
             
-            ui.closeSettingsBtn.onclick = () => ui.projectModal.classList.add('hidden');
-            ui.saveProjectBtn.onclick = () => { saveSettingsUI(); restoreSession(); };
-            ui.manageProjectsBtn.onclick = () => ui.projectListContainer.classList.toggle('hidden');
-            ui.addProjectBtn.onclick = createProject;
+            if (ui.closeSettingsBtn) ui.closeSettingsBtn.onclick = () => ui.projectModal.classList.add('hidden');
+            if (ui.saveProjectBtn) ui.saveProjectBtn.onclick = () => { saveSettingsUI(); restoreSession(); };
+            if (ui.manageProjectsBtn) ui.manageProjectsBtn.onclick = () => ui.projectListContainer.classList.toggle('hidden');
+            if (ui.addProjectBtn) ui.addProjectBtn.onclick = createProject;
 
-            ui.loginSubmit.onclick = handleLogin;
-            ui.loginCancel.onclick = () => ui.loginModal.classList.add('hidden');
-            ui.logoutBtn.onclick = handleLogout;
-            // Listener for manual login button
-            if (ui.loginManualBtn) ui.loginManualBtn.onclick = () => ui.loginModal.classList.remove('hidden');
+            if (ui.loginSubmit) ui.loginSubmit.onclick = handleLogin;
+            if (ui.loginCancel) ui.loginCancel.onclick = () => ui.loginModal.classList.add('hidden');
+            if (ui.logoutBtn) ui.logoutBtn.onclick = handleLogout;
             
-            ui.sCloudEnable.onchange = (e) => { 
+            // Listener for manual login button
+            if (ui.loginManualBtn) {
+                 ui.loginManualBtn.onclick = () => { setLoginMode('login'); ui.loginModal.classList.remove('hidden'); };
+            }
+            
+            // Listener for sign-up toggle
+            if (ui.toggleSignupBtn) {
+                ui.toggleSignupBtn.onclick = () => setLoginMode('signup');
+            }
+            
+            if (ui.sCloudEnable) ui.sCloudEnable.onchange = (e) => { 
                 if(e.target.checked) { 
                     state.settings.cloudEnabled = true; localStorage.setItem('fc_cloud', 'true'); 
                     if(user) startCloudSync();
@@ -1665,26 +1755,26 @@
                 } 
             };
 
-            ui.snapBtn.onclick = () => ui.nativeInput.click();
-            ui.nativeInput.onchange = (e) => { if(e.target.files[0]) handleCapturedBlob(e.target.files[0]); };
-            ui.addNoteBtn.onclick = saveNote;
-            ui.cancelNoteEditBtn.onclick = resetNoteInput;
+            if (ui.snapBtn) ui.snapBtn.onclick = () => ui.nativeInput.click();
+            if (ui.nativeInput) ui.nativeInput.onchange = (e) => { if(e.target.files[0]) handleCapturedBlob(e.target.files[0]); };
+            if (ui.addNoteBtn) ui.addNoteBtn.onclick = saveNote;
+            if (ui.cancelNoteEditBtn) ui.cancelNoteEditBtn.onclick = resetNoteInput;
 
-            ui.navCamera.onclick = () => { 
+            if (ui.navCamera) ui.navCamera.onclick = () => { 
                 ui.navCamera.classList.add('nav-active'); ui.navNotes.classList.remove('nav-active'); ui.navMap.classList.remove('nav-active');
                 ui.modCamera.classList.remove('hidden'); ui.modNotes.classList.add('hidden'); ui.modMap.classList.add('hidden'); 
             };
-            ui.navNotes.onclick = () => { 
+            if (ui.navNotes) ui.navNotes.onclick = () => { 
                 ui.navNotes.classList.add('nav-active'); ui.navCamera.classList.remove('nav-active'); ui.navMap.classList.remove('nav-active');
                 ui.modCamera.classList.add('hidden'); ui.modNotes.classList.remove('hidden'); ui.modMap.classList.add('hidden'); 
             };
-            ui.navMap.onclick = () => { 
+            if (ui.navMap) ui.navMap.onclick = () => { 
                 ui.navMap.classList.add('nav-active'); ui.navCamera.classList.remove('nav-active'); ui.navNotes.classList.remove('nav-active');
                 ui.modCamera.classList.add('hidden'); ui.modNotes.classList.add('hidden'); ui.modMap.classList.remove('hidden');
                 renderMapMarkers(); 
             };
 
-            ui.saveBtn.onclick = async () => { if(state.editingId) { 
+            if (ui.saveBtn) ui.saveBtn.onclick = async () => { if(state.editingId) { 
                 const p = state.photos.find(ph => ph.id === state.editingId);
                 p.captions.c1=ui.inputs.c1.value; p.captions.c2=ui.inputs.c2.value; p.captions.c3=ui.inputs.c3.value; p.metaNote=ui.inputs.meta.value;
                 setProcessing(true); 
@@ -1701,9 +1791,9 @@
                 }
                 await DB.add('photos', await prepPhotoForSave(p)); renderGallery(); ui.previewModal.classList.add('hidden'); setProcessing(false);
             }};
-            ui.closeBtn.onclick = () => ui.previewModal.classList.add('hidden');
+            if (ui.closeBtn) ui.closeBtn.onclick = () => ui.previewModal.classList.add('hidden');
             
-            ui.sLogoInput.onchange = (e) => {
+            if (ui.sLogoInput) ui.sLogoInput.onchange = (e) => {
                 const f = e.target.files[0];
                 if (f) {
                     const r = new FileReader();
@@ -1718,7 +1808,7 @@
                     r.readAsDataURL(f);
                 }
             };
-            ui.sClearLogoBtn.onclick = () => {
+            if (ui.sClearLogoBtn) ui.sClearLogoBtn.onclick = () => {
                 state.settings.logo = null;
                 localStorage.removeItem('fc_logo');
                 ui.sLogoPreview.src = '';
@@ -1765,7 +1855,7 @@
             if(ui.seriesBtn) ui.seriesBtn.onclick = () => {
                 state.seriesMode = !state.seriesMode;
                 if(state.seriesMode) { 
-                    state.currentSeriesIds = new Set(); ui.seriesBtn.classList.add('bg-green-600/80'); ui.seriesIndicator.classList.add('bg-green-400','animate-pulse');
+                    state.currentSeriesIds.add(id); ui.seriesBtn.classList.add('bg-green-600/80'); ui.seriesIndicator.classList.add('bg-green-400','animate-pulse');
                 } else {
                     ui.seriesBtn.classList.remove('bg-green-600/80'); ui.seriesIndicator.classList.remove('bg-green-400','animate-pulse');
                     if (state.currentSeriesIds.size > 0) { state.selectedIds = new Set(state.currentSeriesIds); state.currentSeriesIds.clear(); ui.batchCountLabel.innerText = `${state.selectedIds.size} Captured`; ui.batchModal.classList.remove('hidden'); }
@@ -1814,7 +1904,7 @@
             initCamera();
             setupDictation();
             setupEventListeners();
-            // restoreSession() and updateProjectUI() are now called inside the onAuthStateChanged listener for reliability.
+            // Since initFirebase is synchronous until the auth block, we can safely restore UI/Data here.
         };
     </script>
 </body>
