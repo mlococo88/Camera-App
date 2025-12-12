@@ -1137,10 +1137,10 @@
                         doc.addImage(data, 'JPEG', rowX + offX, y + offY, dim.w, dim.h);
                         let capY = y + slotH + 5; doc.setFontSize(9); doc.setFont("helvetica", "bold"); doc.text(`#${p.photoNumber} - ${p.timestamp}`, rowX, capY);
                         doc.setFont("helvetica", "normal"); doc.setFontSize(8); const capText = [p.captions.c1, p.captions.c2].filter(Boolean).join(" | "); if (capText) doc.text(capText, rowX, capY+4);
-                        if (col === 1 || i === photos.length - 1) { y += slotH + 20; }
+                        if (col === 1 || i === photos.length - 1) { y += slotW + 20; }
                     } else {
                         if (y + slotH + 25 > pH - margin) { doc.addPage(); y = margin; }
-                        const centerX = (pW - slotW) / 2; doc.addImage(data, 'JPEG', centerX + offX, y + offY, dim.w, dim.h); y += slotH + 5;
+                        const centerX = (pW - slotW) / 2; doc.addImage(data, 'JPEG', centerX + offX, y + offY, dim.w, dim.h); y += slotW + 5;
                         doc.setFontSize(10); doc.setFont("helvetica", "bold"); doc.text(`Photo #${p.photoNumber} - ${p.timestamp}`, margin, y); y += 5;
                         doc.setFont("helvetica", "normal"); doc.setFontSize(9); const cap = [p.captions.c1, p.captions.c2, p.captions.c3].filter(Boolean).join(" | "); if (cap) { doc.text(cap, margin, y); y += 5; }
                         if (p.metaNote) { const nt = doc.splitTextToSize("Note: "+p.metaNote, pW-(margin*2)); doc.text(nt, margin, y); y += (nt.length*4); }
