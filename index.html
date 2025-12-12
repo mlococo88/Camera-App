@@ -605,10 +605,29 @@
 
                 // Recreate object URLs for display if missing
                 for(let p of state.photos) {
-                    if(!p.displayUrl && (p.finalBlob || p.finalBuffer)) {
-                         let b = p.finalBlob;
-                         if(!b && p.finalBuffer) b = new Blob([p.finalBuffer], {type:'image/jpeg'});
-                         if(b) p.displayUrl = URL.createObjectURL(b);
+                    // *** STORAGE DOWNLOAD LOGIC: If we don't have a local blob (p.displayUrl is missing)
+                    // but we have a storage URL, try to download and cache it locally.
+                    if(!p.displayUrl && p.storageUrl) {
+                        try {
+                             setProcessing(true, `Downloading ${p.photoNumber} from cloud...`);
+                             const response = await fetch(p.storageUrl);
+                             const blob = await response.blob();
+                             p.finalBlob = blob;
+                             p.displayUrl = URL.createObjectURL(blob);
+                             await DB.add('photos', await prepPhotoForSave(p)); // Cache newly downloaded blob locally
+                        } catch (e) {
+                             console.error("Failed to download image from Storage URL:", e);
+                        }
+                    }
+
+                    // For images synced from other users (which are only compressed previews):
+                    if(!p.displayUrl && p.preview_b64) {
+                         p.displayUrl = `data:image/jpeg;base64,${p.preview_b64}`;
+                    }
+
+                    // If still no URL, use a tiny placeholder for gallery structure
+                    if (!p.displayUrl) {
+                        p.displayUrl = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
                     }
                 }
 
@@ -651,12 +670,8 @@
                 const isSel = state.selectedIds.has(p.id);
                 const isSeries = state.currentSeriesIds.has(p.id);
                 
-                // Determine image source: local blob URL or cloud preview data URL
+                // Use displayUrl (local URL or data URL)
                 let imgSrc = p.displayUrl;
-                if (!imgSrc && p.preview_b64) {
-                    // This case handles images synced from other users (which are only compressed previews)
-                    imgSrc = `data:image/jpeg;base64,${p.preview_b64}`;
-                }
 
 
                 const div = document.createElement('div');
@@ -773,7 +788,9 @@
                         c3: state.settings.defC3
                     },
                     metaNote: "", // Notes part should always be empty initially
-                    synced: false
+                    synced: false,
+                    // NEW: Field to store the Firebase Storage URL
+                    storageUrl: null 
                 };
                 
                 // If in series mode, inherit previous series captions if available
@@ -789,12 +806,26 @@
                 
                 // 2. Process Visuals (Burn-in)
                 await processPhotoVisuals(photo, file);
+                
+                // 3. Upload to Storage and get URL (Crucial step for multi-user sharing)
+                if (state.settings.cloudEnabled && user && storage && photo.finalBlob) {
+                     setProcessing(true, "Uploading Image to Storage...");
+                     const storagePath = `project_files/${appId}/${state.settings.projectId}/${photo.id}.jpg`;
+                     const storageRef = ref(storage, storagePath);
+                     
+                     // Upload the actual photo blob
+                     const uploadTask = await uploadBytes(storageRef, photo.finalBlob);
+                     
+                     // Get the secure URL and save it to the photo object
+                     photo.storageUrl = await getDownloadURL(uploadTask.ref);
+                }
 
-                // 3. Save
+
+                // 4. Save to IndexedDB (local cache)
                 state.photos.unshift(photo);
                 await DB.add('photos', await prepPhotoForSave(photo));
                 
-                // 4. Handle Series Mode and Auto-Open Preview
+                // 5. Handle Series Mode and Auto-Open Preview
                 if(state.seriesMode) {
                     state.currentSeriesIds.add(id);
                     state.selectedIds.add(id); // Auto-select in series mode
@@ -808,10 +839,10 @@
                     openPreview(id);
                 }
                 
-                // 5. Render
+                // 6. Render
                 renderGallery();
                 
-                // 6. Cloud Sync trigger
+                // 7. Cloud Sync trigger (Upload metadata and Storage URL to Firestore)
                 if(state.settings.cloudEnabled && user) syncPendingItems();
 
             } catch(e) { console.error(e); showAlert("Photo Error: " + e.message); }
@@ -1501,23 +1532,50 @@
             if (pendingPhotos.length > 0) updateCloudUI('sync');
 
             for (const p of pendingPhotos) {
-                // Re-hydrate blob for compression if needed
-                let blob = p.finalBlob;
-                if (!blob && p.finalBuffer) blob = new Blob([p.finalBuffer], {type:'image/jpeg'});
+                // Determine if we need to upload the file to storage (only if we have the local blob and it hasn't been uploaded yet)
+                let imageBlob = p.finalBlob;
+                if (!imageBlob && p.finalBuffer) imageBlob = new Blob([p.finalBuffer], {type:'image/jpeg'});
 
-                if (blob) {
-                    const previewB64 = await compressForCloud(blob);
-                    const cloudData = { ...p, preview_b64: previewB64, synced: true };
-                    // Remove heavy data for upload
-                    delete cloudData.originalBlob; delete cloudData.finalBlob; delete cloudData.displayUrl; delete cloudData.finalBuffer; 
-                    delete cloudData.isCloudPreview;
+                let storageUrl = p.storageUrl;
+                
+                if (imageBlob && storage && !storageUrl) {
+                     try {
+                         const storagePath = `project_files/${appId}/${state.settings.projectId}/${p.id}.jpg`;
+                         const storageRef = ref(storage, storagePath);
+                         
+                         // 1. Upload full image to Firebase Storage
+                         const uploadTask = await uploadBytes(storageRef, imageBlob);
+                         storageUrl = await getDownloadURL(uploadTask.ref);
+                         p.storageUrl = storageUrl;
+                         
+                         // Update local DB record with the new URL
+                         await DB.add('photos', await prepPhotoForSave(p));
 
-                    const success = await uploadToCloud('shared_photos', p.id, cloudData);
-                    if (success) {
-                        p.synced = true;
-                        // Update local DB
-                        await DB.add('photos', await prepPhotoForSave(p));
-                    }
+                     } catch (e) {
+                         console.error("Storage Upload Failed:", e);
+                         // Continue to next photo if storage upload fails
+                         continue;
+                     }
+                }
+
+                // Prepare metadata for Firestore upload
+                const cloudData = { 
+                    ...p, 
+                    synced: true,
+                    // Send Storage URL instead of massive base64 preview
+                    storageUrl: storageUrl,
+                    // Remove heavy local data fields for Firestore upload
+                    finalBlob: undefined, 
+                    finalBuffer: undefined, 
+                    displayUrl: undefined,
+                    preview_b64: undefined // Ensure legacy preview is gone
+                };
+                
+                // 2. Upload metadata (including Storage URL) to Firestore
+                const success = await uploadToCloud('shared_photos', p.id, cloudData);
+                if (success) {
+                    p.synced = true;
+                    await DB.add('photos', await prepPhotoForSave(p));
                 }
             }
 
@@ -1573,24 +1631,31 @@
                         if (idx > -1) {
                             // UPDATE existing photo metadata (captions, notes) without reloading image
                             const p = state.photos[idx];
-                            // Only update text fields to avoid flickering/reloading blobs
+                            // Only update text fields and Storage URL
                             p.captions = d.captions || p.captions;
                             p.metaNote = d.metaNote || "";
                             p.weather = d.weather || p.weather;
                             p.compass = d.compass || p.compass;
+                            p.storageUrl = d.storageUrl || p.storageUrl; // NEW: Update Storage URL
+                            
                             // Persist updates
                             await DB.add('photos', await prepPhotoForSave(p));
-                            // Only re-render if we are not currently editing this specific photo
+                            
+                            // Force gallery refresh if the image is remote (no local displayUrl)
+                            if (p.storageUrl && !p.displayUrl) {
+                                restoreSession(); // Trigger full session load, which attempts download/caching in restoreSession
+                                return;
+                            }
+                            
                             if (state.editingId !== p.id) renderGallery();
-                        } else if (d.preview_b64) {
-                            // ADD new photo (downloading compressed preview)
-                            const blob = await (await fetch(d.preview_b64)).blob();
-                            const newP = { ...d, finalBlob: blob, displayUrl: URL.createObjectURL(blob), isCloudPreview: true, synced: true };
-                            // Check if duplicate before adding
+                        } else {
+                            // NEW: Add new remote photo entry to local DB, without the file yet
+                            const newP = { ...d, isCloudPreview: true, synced: true };
                             if (!state.photos.find(x => x.id === newP.id)) {
                                 state.photos.unshift(newP); 
-                                await DB.add('photos', { ...newP, finalBuffer: await blob.arrayBuffer() }); 
-                                renderGallery();
+                                await DB.add('photos', newP); // Save metadata only
+                                // Trigger full session load to attempt downloading
+                                restoreSession(); 
                             }
                         }
                     }
@@ -1677,7 +1742,17 @@
         function showAlert(msg) { return new Promise(r=>{ ui.alertTitle.innerText="Notice"; ui.alertMessage.innerText=msg; ui.alertOkBtn.onclick=()=>{ui.alertOverlay.classList.add('hidden');r();}; ui.alertCancelBtn.classList.add('hidden'); ui.alertOverlay.classList.remove('hidden'); }); }
         function showConfirm(msg) { return new Promise(r=>{ ui.alertTitle.innerText="Confirm"; ui.alertMessage.innerText=msg; ui.alertCancelBtn.classList.remove('hidden'); ui.alertOkBtn.onclick=()=>{ui.alertOverlay.classList.add('hidden');r(true);}; ui.alertCancelBtn.onclick=()=>{ui.alertOverlay.classList.add('hidden');r(false);}; ui.alertOverlay.classList.remove('hidden'); }); }
         
-        async function prepPhotoForSave(p) { const b = await (p.finalBlob ? p.finalBlob.arrayBuffer() : null); const s = {...p}; delete s.originalBlob; delete s.displayUrl; delete s.finalBlob; s.finalBuffer = b; return s; }
+        async function prepPhotoForSave(p) { 
+            const b = await (p.finalBlob ? p.finalBlob.arrayBuffer() : null); 
+            const s = {...p}; 
+            // Remove full blob/URL data for IndexedDB persistence, retain storage URL
+            delete s.originalBlob; 
+            delete s.displayUrl; 
+            delete s.finalBlob; 
+            s.finalBuffer = b; 
+            return s; 
+        }
+
         function createImageFromBlob(b) { return new Promise(r => { const u = URL.createObjectURL(b); const i = new Image(); i.onload = () => { URL.revokeObjectURL(u); r(i); }; i.src = u; }); }
         function formatGPS(lat, lon) { return (lat && lon) ? `${lat.toFixed(5)}, ${lon.toFixed(5)}` : "No GPS"; }
         function blobToBuffer(blob) { return blob ? blob.arrayBuffer() : Promise.resolve(null); }
@@ -1743,9 +1818,8 @@
                 // Mark edited as unsynced so it re-uploads
                 p.synced = false;
                 if(state.settings.cloudEnabled && user) {
-                     const previewB64 = await compressForCloud(p.finalBlob);
-                     const cloudData = { ...p, preview_b64: previewB64, synced: true };
-                     delete cloudData.originalBlob; delete cloudData.finalBlob; delete cloudData.displayUrl; delete cloudData.finalBuffer;
+                     // NEW: Sync photo now uses storage URL, not base64 preview
+                     const cloudData = { ...p, synced: true, storageUrl: p.storageUrl };
                      const success = await uploadToCloud('shared_photos', p.id, cloudData);
                      if(success) p.synced = true;
                 }
