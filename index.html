@@ -265,17 +265,18 @@
                 <h3 class="text-xs font-bold text-blue-400 uppercase tracking-wider mb-2">Project Management</h3>
                 <div class="flex flex-col gap-2">
                     <label class="block text-xs text-gray-400">Current Project</label>
-                    <div class="flex gap-2">
-                        <div class="flex-1 bg-gray-900 p-3 rounded border border-gray-600 text-sm font-mono text-white flex items-center justify-between">
-                            <span id="current-project-label">Default</span>
-                            <span class="text-[10px] bg-blue-900 text-blue-200 px-2 py-0.5 rounded">Active</span>
-                        </div>
-                    </div>
+                    
+                    <!-- NEW PROJECT SELECTOR -->
+                    <select id="active-project-selector" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-600 text-sm font-mono" onchange="window.switchProject(this.value)">
+                        <!-- Options populated by JS renderProjectList -->
+                        <option value="default-project" disabled>Loading projects...</option>
+                    </select>
+
                     <button id="manage-projects-btn" class="w-full bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold py-3 rounded border border-gray-600 flex items-center justify-center gap-2">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                         </svg>
-                        Manage Projects
+                        Manage Project List
                     </button>
                     <!-- Project List Container (Hidden by default) -->
                     <div id="project-list-container" class="hidden mt-2 space-y-2 border-t border-gray-700 pt-2">
@@ -639,7 +640,6 @@
                 onAuthStateChanged(auth, (u) => {
                     user = u;
                     updateAuthUI();
-                    // Load data only when a user is confirmed
                     if(u) {
                         fetchUserProjects(); // Load project list
                         if(state.settings.cloudEnabled && state.settings.projectId) startCloudSync();
@@ -711,6 +711,7 @@
             projectListContainer: document.getElementById('project-list-container'), projectList: document.getElementById('project-list'), manageProjectsBtn: document.getElementById('manage-projects-btn'), addProjectBtn: document.getElementById('add-project-btn'), newProjectInput: document.getElementById('new-project-input'), currentProjectLabel: document.getElementById('current-project-label'),
             // NEW: Project ID Input (for adding new project)
             newProjectIdInput: document.getElementById('new-project-id'), 
+            activeProjectSelector: document.getElementById('active-project-selector'), // NEW Selector
 
             // Core
             modCamera: document.getElementById('module-camera'), modNotes: document.getElementById('module-notes'), modMap: document.getElementById('module-map'), navCamera: document.getElementById('nav-camera'), navNotes: document.getElementById('nav-notes'), navMap: document.getElementById('nav-map'),
@@ -1222,7 +1223,7 @@
                     const offX = (slotW - dim.w) / 2; const offY = (slotH - dim.h) / 2;
 
                     if (layout === 4) {
-                        const col = i % 2; const rowX = margin + (col * (slotW + 15)); const isPageStart = i > 0 && i % 4 === 0; const isOutOfSpace = y + slotH + 30 > pH - margin;
+                        const col = i % 2; const rowX = margin + (col * (slotW + 15)); const isPageStart = i > 0 && i % 4 === 0; const isOutOfSpace = y + slotH + 25 > pH - margin;
                         if (col === 0 && (isPageStart || isOutOfSpace)) { doc.addPage(); y = margin; }
                         doc.addImage(data, 'JPEG', rowX + offX, y + offY, dim.w, dim.h);
                         let capY = y + slotH + 5; doc.setFontSize(9); doc.setFont("helvetica", "bold"); doc.text(`#${p.photoNumber} - ${p.timestamp}`, rowX, capY);
@@ -1421,7 +1422,33 @@
         }
 
         function renderProjectList() {
-            ui.projectList.innerHTML = '';
+            const selector = ui.activeProjectSelector;
+            // Clear existing options
+            selector.innerHTML = '';
+
+            // Add an option for the default local project if it's not in the user list
+            if (!state.userProjects.some(p => p.id === state.settings.projectId)) {
+                 const defaultOption = document.createElement('option');
+                 defaultOption.value = state.settings.projectId;
+                 defaultOption.textContent = state.settings.projectId + " (Current)";
+                 selector.appendChild(defaultOption);
+            }
+
+            // Add all saved projects
+            state.userProjects.sort((a,b) => b.created - a.created).forEach(p => {
+                const option = document.createElement('option');
+                option.value = p.id;
+                option.textContent = `${p.name} (${p.id})`;
+                if (p.id === state.settings.projectId) {
+                    option.selected = true;
+                }
+                selector.appendChild(option);
+            });
+            
+            // Re-render the detailed list below the selector
+            const detailedList = document.getElementById('project-list');
+            detailedList.innerHTML = '';
+
             state.userProjects.sort((a,b) => b.created - a.created).forEach(p => {
                 const isActive = p.id === state.settings.projectId;
                 const div = document.createElement('div');
@@ -1442,7 +1469,7 @@
                     ${isActive ? '<span class="text-[10px] text-blue-400 mr-2">Active</span>' : ''}
                     ${deleteBtnHtml}
                 `;
-                ui.projectList.appendChild(div);
+                detailedList.appendChild(div);
             });
             updateProjectUI(state.settings.projectId);
         }
@@ -1451,8 +1478,16 @@
             // Looks up Project Name from saved projects or defaults to the ID
             const p = state.userProjects.find(x => x.id === pid);
             const name = p ? p.name : pid;
-            ui.currentProjectLabel.innerText = name;
+            
+            // Update the main header display
             ui.projectIdDisplay.innerText = name;
+
+            // Update the main Project ID input field and the selector
+            const mainIdInput = document.getElementById('set-proj-id');
+            if (mainIdInput) mainIdInput.value = pid;
+            
+            const selector = ui.activeProjectSelector;
+            if (selector) selector.value = pid;
         }
 
         // --- Rest of standard logic ---
@@ -1772,6 +1807,8 @@
             if (ui.saveProjectBtn) ui.saveProjectBtn.onclick = () => { saveSettingsUI(); restoreSession(); };
             if (ui.manageProjectsBtn) ui.manageProjectsBtn.onclick = () => ui.projectListContainer.classList.toggle('hidden');
             if (ui.addProjectBtn) ui.addProjectBtn.onclick = createProject;
+            if (ui.activeProjectSelector) ui.activeProjectSelector.onchange = (e) => switchProject(e.target.value);
+
 
             if (ui.loginSubmit) ui.loginSubmit.onclick = handleLogin;
             if (ui.loginCancel) ui.loginCancel.onclick = () => ui.loginModal.classList.add('hidden');
@@ -1810,7 +1847,7 @@
                 ui.modCamera.classList.add('hidden'); ui.modNotes.classList.remove('hidden'); ui.modMap.classList.add('hidden'); 
             };
             if (ui.navMap) ui.navMap.onclick = () => { 
-                ui.navMap.classList.add('nav-active'); ui.navCamera.classList.remove('nav-active'); ui.navNotes.classList.remove('nav-active');
+                ui.navMap.classList.add('nav-active'); ui.navCamera.classList.remove('nav-active'); ui.navMap.classList.remove('nav-active');
                 ui.modCamera.classList.add('hidden'); ui.modNotes.classList.add('hidden'); ui.modMap.classList.remove('hidden');
                 renderMapMarkers(); 
             };
@@ -1907,7 +1944,7 @@
                 state.selectedIds.clear();
                 renderGallery();
             };
-            if(ui.cancelSelectBtn) ui.cancelSelectBtn.onclick = () => {
+            if (ui.cancelSelectBtn) ui.cancelSelectBtn.onclick = () => {
                 state.isSelectMode = false;
                 state.selectedIds.clear();
                 renderGallery();
@@ -1945,9 +1982,6 @@
             initCamera();
             setupDictation();
             setupEventListeners();
-            // Since initFirebase is synchronous until the auth block, we can safely restore UI/Data here.
-            restoreSession();
-            updateProjectUI(state.settings.projectId);
         };
     </script>
 </body>
