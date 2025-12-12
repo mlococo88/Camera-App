@@ -386,7 +386,7 @@
                     <span class="text-sm">PDF Resolution</span>
                     <select id="set-pdf-res" class="bg-gray-900 text-white text-xs rounded p-2 border border-gray-600">
                         <option value="800">Screen (Email)</option>
-                        <option value="2000" selected>Print (High Res)</option>
+                        <option value="2000" selected>Print (High Res</option>
                     </select>
                 </div>
                 <div class="flex items-center justify-between">
@@ -556,7 +556,7 @@
 
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js';
-        import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signInWithCustomToken, signOut, signInAnonymously, createUserWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
+        import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signInWithCustomToken, signOut, signInAnonymously, createUserWithEmailAndPassword, setPersistence, browserLocalPersistence } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
         import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
 
         // --- CONFIG ---
@@ -614,28 +614,38 @@
                 auth = getAuth(app);
                 db = getFirestore(app);
 
+                // FIX: Set persistence to LOCAL so named user sessions persist across restarts/closures
+                await setPersistence(auth, browserLocalPersistence);
+
                 // Determine authentication flow
                 const customToken = typeof __initial_auth_token !== 'undefined' && __initial_auth_token;
                 
                 if (customToken) {
                     try {
+                        // Sign in with token (Canvas environment)
                         await signInWithCustomToken(auth, customToken);
                     } catch(e) {
                         console.warn("Custom token sign-in failed, falling back to anonymous.", e);
-                        await signInAnonymously(auth);
+                        // Only sign in anonymously if a named user hasn't already been restored by persistence
+                        if (!auth.currentUser) await signInAnonymously(auth);
                     }
                 } else {
-                    // If running outside Canvas OR token failed, sign in anonymously.
-                    await signInAnonymously(auth);
+                    // If no token, check if persistence restored a user. If not, sign in anonymously.
+                    // This ensures there is always an authenticated user (either named or anonymous).
+                    if (!auth.currentUser) await signInAnonymously(auth);
                 }
 
-                // This listener fires immediately after the sign-in above completes.
+                // This listener fires immediately after the sign-in above completes OR when a persisted session is restored.
                 onAuthStateChanged(auth, (u) => {
                     user = u;
                     updateAuthUI();
+                    // Load data only when a user is confirmed
                     if(u) {
                         fetchUserProjects(); // Load project list
                         if(state.settings.cloudEnabled && state.settings.projectId) startCloudSync();
+                        // Initial data load triggered after auth state confirmed
+                        restoreSession();
+                        updateProjectUI(state.settings.projectId);
                     } else {
                         updateCloudUI('off');
                         if(unsubscribeNotes) unsubscribeNotes();
@@ -664,7 +674,7 @@
             name: 'FieldCamDB', version: 5, // FIXED version number to 5
             open: function() { return new Promise((res, rej) => { const req = indexedDB.open(this.name, this.version); req.onupgradeneeded = (e) => { const db = e.target.result; if (!db.objectStoreNames.contains('photos')) db.createObjectStore('photos', { keyPath: 'id' }); if (!db.objectStoreNames.contains('notes')) db.createObjectStore('notes', { keyPath: 'id' }); }; req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error); }); },
             add: async function(s, o) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readwrite'); tx.objectStore(s).put(o); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); },
-            getAll: async function(s) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readonly'); const req = tx.objectStore(s).getAll(); req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error); }); },
+            getAll: async function(s) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readonly'); const req = tx.objectStore(s).getAll(); req.onsuccess = () => res(req.result); req.onerror = () => rej(tx.error); }); },
             delete: async function(s, id) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readwrite'); tx.objectStore(s).delete(id); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); },
             clear: async function(s) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readwrite'); tx.objectStore(s).clear(); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); },
             get: async function(s, id) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readonly'); const req = tx.objectStore(s).get(id); req.onsuccess = () => res(req.result); req.onerror = () => rej(tx.error); }); }
@@ -1018,7 +1028,6 @@
         function editNote(id) {
             const note = state.notes.find(n => n.id === id);
             if (!note) return;
-            state.editingNoteId = id;
             
             // Populate tags and note input
             document.getElementById('new-note-tags').value = (note.tags || []).join(', ');
@@ -1037,7 +1046,6 @@
         }
         
         function resetNoteInput() {
-            state.editingNoteId = null;
             document.getElementById('new-note-tags').value = '';
             ui.newNoteInput.value = '';
             ui.addNoteBtn.innerText = "Add Note";
@@ -1313,7 +1321,7 @@
             let csv = "Filename,Date,Lat,Lon,Direction,Note,Cap1,Cap2,Cap3\n";
             for (const p of targets) {
                 let blob = p.finalBlob;
-                if (!blob && p.finalBuffer) blob = new Blob([p.finalBuffer], {type: 'image/jpeg'});
+                if (!blob && p.finalBuffer) blob = new Blob([p.finalBuffer], {type:'image/jpeg'});
                 if (blob) {
                     zip.file(`IMG_${p.photoNumber}_${p.id}.jpg`, blob);
                     csv += `IMG_${p.photoNumber}_${p.id}.jpg,"${p.timestamp}",${p.lat},${p.lon},"${p.compass}","${(p.metaNote||"").replace(/"/g,'""')}","${p.captions.c1}","${p.captions.c2}","${p.captions.c3}"\n`;
@@ -1938,6 +1946,8 @@
             setupDictation();
             setupEventListeners();
             // Since initFirebase is synchronous until the auth block, we can safely restore UI/Data here.
+            restoreSession();
+            updateProjectUI(state.settings.projectId);
         };
     </script>
 </body>
