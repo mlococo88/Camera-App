@@ -1019,7 +1019,11 @@
             const note = state.notes.find(n => n.id === id);
             if (!note) return;
             state.editingNoteId = id;
+            
+            // Populate tags and note input
+            document.getElementById('new-note-tags').value = (note.tags || []).join(', ');
             ui.newNoteInput.value = note.text;
+            
             ui.addNoteBtn.innerText = "Update Note";
             ui.cancelNoteEditBtn.classList.remove('hidden');
             ui.newNoteInput.focus();
@@ -1034,6 +1038,7 @@
         
         function resetNoteInput() {
             state.editingNoteId = null;
+            document.getElementById('new-note-tags').value = '';
             ui.newNoteInput.value = '';
             ui.addNoteBtn.innerText = "Add Note";
             ui.cancelNoteEditBtn.classList.add('hidden');
@@ -1041,13 +1046,23 @@
 
         async function saveNote() {
             const text = ui.newNoteInput.value.trim(); 
-            if (!text) return;
+            const tagInput = document.getElementById('new-note-tags').value.trim();
+            
+            if (!text && !tagInput) return;
+
+            // Process tags: split by comma, clean whitespace, convert spaces/slashes to hyphen
+            const tags = tagInput
+                .split(',')
+                .map(t => t.trim())
+                .filter(t => t.length > 0)
+                .map(t => t.replace(/[\s\/]+/g, '-').toLowerCase()); // Normalize tags
 
             if (state.editingNoteId) {
                 // UPDATE EXISTING
                 const note = state.notes.find(n => n.id === state.editingNoteId);
                 if (note) {
                     note.text = text;
+                    note.tags = tags; // Update tags
                     note.synced = false; // Mark for re-sync
                     
                     // Update in Arrays/DB
@@ -1070,6 +1085,7 @@
                 const note = { 
                     id: Date.now(), 
                     text: text, 
+                    tags: tags, // Include tags
                     timestamp: new Date().toLocaleString(), 
                     location: state.currentLocation || "No GPS", // Fallback just in case
                     projectId: state.settings.projectId, 
@@ -1080,7 +1096,7 @@
                 await DB.add('notes', note); 
                 state.notes.unshift(note); 
                 renderNotes(); 
-                ui.newNoteInput.value = '';
+                resetNoteInput(); // Clear UI
     
                 // 2. Try upload immediately
                 if(state.settings.cloudEnabled && user) {
@@ -1127,8 +1143,11 @@
         function exportNotes() {
             if (state.notes.length === 0) return showAlert("No notes to export.");
             const csvContent = "data:text/csv;charset=utf-8," 
-                + "ID,Timestamp,Location,Text\n"
-                + state.notes.map(n => `${n.id},"${n.timestamp}","${n.location}","${n.text.replace(/"/g, '""')}"`).join("\n");
+                + "ID,Timestamp,Location,Tags,Text\n" // Updated header
+                + state.notes.map(n => {
+                    const safe = (s) => `"${(s||"").replace(/"/g, '""')}`;
+                    return `${n.id},${safe(n.timestamp)},${safe(n.location)},"${(n.tags || []).join(';') || ''}",${safe(n.text)}`;
+                }).join("\n");
             
             const encodedUri = encodeURI(csvContent);
             const link = document.createElement("a");
@@ -1159,7 +1178,21 @@
                 doc.addPage(); y = margin; doc.setFontSize(16); doc.text("Field Observations", margin, y); y += 10; doc.setFontSize(11);
                 notes.sort((a,b) => a.id - b.id).forEach(n => {
                     doc.setFont("helvetica", "bold"); doc.text(`${n.timestamp} | ${n.location}`, margin, y); y += 6;
-                    doc.setFont("helvetica", "normal"); const lines = doc.splitTextToSize(n.text, pW-(margin*2)); doc.text(lines, margin, y); y += (lines.length*6)+6;
+                    
+                    // Include tags in PDF
+                    const tagLine = (n.tags || []).map(t => t.replace(/[\s\/]+/g, ' / ')).join('; ');
+                    if (tagLine) {
+                        doc.setFont("helvetica", "italic");
+                        doc.setFontSize(9);
+                        doc.text(`Tags: ${tagLine}`, margin, y);
+                        y += 4;
+                        doc.setFontSize(11); // Reset font size for note text
+                    }
+
+                    doc.setFont("helvetica", "normal"); 
+                    const lines = doc.splitTextToSize(n.text, pW-(margin*2)); 
+                    doc.text(lines, margin, y); 
+                    y += (lines.length*6)+6;
                     if (y > pH - margin) { doc.addPage(); y = margin; }
                 });
             }
@@ -1827,7 +1860,7 @@
             if(ui.deleteSelected) ui.deleteSelected.onclick = async () => { if(await showConfirm("Delete selected items?")) { for(let id of state.selectedIds) await DB.delete('photos', id); state.photos = state.photos.filter(p=>!state.selectedIds.has(p.id)); state.selectedIds.clear(); renderGallery(); } };
             if(ui.deleteSingleBtn) ui.deleteSingleBtn.onclick = async () => { if(await showConfirm("Delete this photo?")) { await DB.delete('photos', state.editingId); state.photos = state.photos.filter(p=>p.id!==state.editingId); ui.previewModal.classList.add('hidden'); renderGallery(); } };
             if(ui.newVisitBtn) ui.newVisitBtn.onclick = async () => { if(await showConfirm("Reset project?")) { await DB.clear('photos'); await DB.clear('notes'); state.photos=[]; state.notes=[]; state.selectedIds.clear(); state.settings.nextNum=1; localStorage.setItem('fc_num',1); renderGallery(); renderNotes(); loadSettingsUI(); } };
-            if(ui.openBatchBtn) ui.openBatchBtn.onclick = () => { if(state.selectedIds.size === 0) return showAlert("Select photos first."); ui.batchCountLabel.innerText = `${state.selectedIds.size} Selected`; ui.groupInputs.forEach(i => {if(i) i.value = '';}); ui.batchModal.classList.remove('hidden'); };
+            if(ui.openBatchBtn) ui.openBatchBtn.onclick = () => { if(state.selectedIds.size === 0) return showAlert("Select photos first."); ui.batchCountLabel.innerText = `${state.selectedIds.size} Captured`; ui.batchModal.classList.remove('hidden'); };
             if(ui.cancelBatchBtn) ui.cancelBatchBtn.onclick = () => { ui.batchModal.classList.add('hidden'); state.selectedIds.clear(); renderGallery(); };
             if(ui.applyBatchBtn) ui.applyBatchBtn.onclick = async () => { 
                 const [c1, c2, c3, n] = ui.groupInputs.map(i => i ? i.value : ""); 
