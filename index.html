@@ -423,7 +423,7 @@
         <div class="flex-1 overflow-y-auto p-4 space-y-6">
             <div class="bg-black rounded-lg border border-gray-800 flex justify-center items-center overflow-hidden h-64 md:h-80 shrink-0 relative"><img id="preview-img" src="" class="h-full w-auto object-contain"></div>
             <div class="space-y-4 max-w-lg mx-auto">
-                <div class="space-y-2"><label class="block text-xs uppercase text-gray-500 font-bold">Burn-in Captions</label><input type="text" id="modal-caption-1" class="w-full bg-gray-800 text-white rounded p-3 border border-gray-700 text-sm"><input type="text" id="modal-caption-2" class="w-full bg-gray-800 text-white rounded p-3 border border-gray-700 text-sm"><input type="text" id="modal-caption-3" class="w-full bg-gray-800 text-white rounded p-3 border border-gray-700 text-sm"></div>
+                <div class="space-y-2"><label class="block text-xs uppercase text-gray-500 font-bold">Burn-in Captions</label><input type="text" id="modal-caption-1" class="w-full bg-gray-800 text-white rounded p-3 border border-gray-700 text-sm"><input type="text" id="modal-caption-2" class="w-full bg-gray-800 text-white rounded p-3 border border-gray-70m text-sm"><input type="text" id="modal-caption-3" class="w-full bg-gray-800 text-white rounded p-3 border border-gray-700 text-sm"></div>
                 <div><label class="block text-xs uppercase text-gray-500 font-bold mb-1 flex justify-between"><span>Notes</span><button id="single-mic-btn" class="text-blue-400">Mic</button></label><textarea id="modal-metadata" class="w-full bg-gray-800 text-white rounded p-3 border border-gray-700 text-sm h-20"></textarea></div>
                 <div class="grid grid-cols-2 gap-3 pt-4 border-t border-gray-800 mb-8"><button id="preview-download-btn" class="bg-gray-800 text-white font-semibold py-3 rounded border border-gray-700 hover:bg-gray-700">Download</button><button id="save-photo-btn" class="bg-blue-600 text-white font-bold py-3 rounded hover:bg-blue-500 shadow-lg">Save</button></div>
             </div>
@@ -745,11 +745,14 @@
             const p = state.photos.find(x => x.id === id);
             if (!p) return;
             state.editingId = id;
-            ui.previewImg.src = p.displayUrl;
-            ui.inputs.c1.value = p.captions.c1 || "";
-            ui.inputs.c2.value = p.captions.c2 || "";
-            ui.inputs.c3.value = p.captions.c3 || "";
+            
+            // If the photo has existing captions/notes (e.g., from series mode), use those.
+            ui.inputs.c1.value = p.captions.c1 || state.settings.defC1 || ""; 
+            ui.inputs.c2.value = p.captions.c2 || state.settings.defC2 || "";
+            ui.inputs.c3.value = p.captions.c3 || state.settings.defC3 || "";
             ui.inputs.meta.value = p.metaNote || "";
+            
+            ui.previewImg.src = p.displayUrl;
             ui.previewModal.classList.remove('hidden');
         }
 
@@ -1142,7 +1145,7 @@
                         if (col === 1 || i === photos.length - 1) { y += slotH + 20; }
                     } else {
                         if (y + slotH + 25 > pH - margin) { doc.addPage(); y = margin; }
-                        const centerX = (pW - slotW) / 2; doc.addImage(data, 'JPEG', centerX + offX, y + offY, dim.w, dim.h); y += slotW + 5;
+                        const centerX = (pW - slotW) / 2; doc.addImage(data, 'JPEG', centerX + offX, y + offY, dim.w, dim.h); y += slotH + 5;
                         doc.setFontSize(10); doc.setFont("helvetica", "bold"); doc.text(`Photo #${p.photoNumber} - ${p.timestamp}`, margin, y); y += 5;
                         doc.setFont("helvetica", "normal"); doc.setFontSize(9); const cap = [p.captions.c1, p.captions.c2, p.captions.c3].filter(Boolean).join(" | "); if (cap) { doc.text(cap, margin, y); y += 5; }
                         if (p.metaNote) { const nt = doc.splitTextToSize("Note: "+p.metaNote, pW-(margin*2)); doc.text(nt, margin, y); y += (nt.length*4); }
@@ -1395,28 +1398,35 @@
 
         // --- Rest of standard logic ---
         function updateAuthUI() {
-            if(user) {
-                ui.authStatusContainer.classList.remove('hidden');
-                // The anonymous user email will show as null, so check for it
-                ui.userEmailDisplay.innerText = user.email || `User ID: ${user.uid.substring(0, 8)}... (Anonymous)`;
-                ui.logoutBtn.classList.remove('hidden');
+            const isLoggedIn = user && user.uid;
+            const isNamedUser = user && user.email;
 
-                // FIX: Show manual login button if user is anonymous (no email means anonymous/token user)
-                if (user.email) {
-                    ui.loginManualBtn.classList.add('hidden');
-                    ui.logoutBtn.innerText = "Sign Out";
-                } else {
-                    ui.loginManualBtn.classList.remove('hidden');
-                    ui.logoutBtn.innerText = "Disable Cloud Sync (Local)";
+            if(isLoggedIn) {
+                ui.authStatusContainer.classList.remove('hidden');
+                ui.userEmailDisplay.innerText = isNamedUser ? user.email : `User ID: ${user.uid.substring(0, 8)}... (Anonymous)`;
+                ui.logoutBtn.classList.remove('hidden');
+                
+                // Show login button ONLY if they are an anonymous user
+                if (ui.loginManualBtn) {
+                     if (isNamedUser) {
+                         ui.loginManualBtn.classList.add('hidden');
+                         ui.logoutBtn.innerText = "Sign Out";
+                     } else {
+                         ui.loginManualBtn.classList.remove('hidden');
+                         ui.logoutBtn.innerText = "Disable Cloud Sync (Local)";
+                     }
                 }
                 
                 // Auto-check sync if user is logged in (even anon)
                 ui.sCloudEnable.checked = state.settings.cloudEnabled;
             } else {
+                // Not logged in
                 ui.authStatusContainer.classList.add('hidden');
                 ui.logoutBtn.classList.add('hidden');
+                if (ui.loginManualBtn) ui.loginManualBtn.classList.remove('hidden'); // Show login button if user is completely logged out (shouldn't happen with persistence set)
             }
-            updateCloudUI(user ? 'on' : 'off');
+            
+            updateCloudUI(isLoggedIn ? 'on' : 'off');
         }
         
         // Helper function to toggle login modal mode
@@ -1471,9 +1481,18 @@
         }
         
         async function handleLogout() {
-            // Note: Cannot sign out the anonymous user provided by Canvas, but we can disable cloud sync locally.
-            state.settings.cloudEnabled = false; ui.sCloudEnable.checked = false; localStorage.setItem('fc_cloud', 'false');
-            if(user.email) await signOut(auth); // Only sign out if they signed in with email/pass
+            // NOTE: If a named user signs out, we must sign them out of Firebase Auth to end the persisted named session.
+            if (user && user.email) {
+                 await signOut(auth);
+            }
+            
+            // Disable cloud sync locally immediately
+            state.settings.cloudEnabled = false; 
+            if (ui.sCloudEnable) ui.sCloudEnable.checked = false; 
+            localStorage.setItem('fc_cloud', 'false');
+
+            // If a named user signed out, initFirebase will eventually try to sign them back in anonymously
+            // via the onAuthStateChanged listener detecting the logged out state.
         }
         function updateCloudUI(status) {
             ui.cloudStatus.className = 'absolute top-1 right-1 w-2 h-2 rounded-full border border-gray-700 ';
