@@ -370,14 +370,7 @@
             <div class="flex items-center gap-3"><button id="close-preview-btn" class="text-gray-400 p-2 hover:text-white transition-colors"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></button></div>
             <button id="preview-delete-btn" class="text-red-500 p-2 hover:bg-red-900/30 rounded-full transition-colors"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
         </div>
-        <div class="flex-1 overflow-y-auto p-4 space-y-6">
-            <div class="bg-black rounded-lg border border-gray-800 flex justify-center items-center overflow-hidden h-64 md:h-80 shrink-0 relative"><img id="preview-img" src="" class="h-full w-auto object-contain"></div>
-            <div class="space-y-4 max-w-lg mx-auto">
-                <div class="space-y-2"><label class="block text-xs uppercase text-gray-500 font-bold">Burn-in Captions</label><input type="text" id="modal-caption-1" class="w-full bg-gray-800 text-white rounded p-3 border border-gray-700 text-sm"><input type="text" id="modal-caption-2" class="w-full bg-gray-800 text-white rounded p-3 border border-gray-700 text-sm"><input type="text" id="modal-caption-3" class="w-full bg-gray-800 text-white rounded p-3 border border-gray-700 text-sm"></div>
-                <div><label class="block text-xs uppercase text-gray-500 font-bold mb-1 flex justify-between"><span>Notes</span><button id="single-mic-btn" class="text-blue-400">Mic</button></label><textarea id="modal-metadata" class="w-full bg-gray-800 text-white rounded p-3 border border-gray-700 text-sm h-20"></textarea></div>
-                <div class="grid grid-cols-2 gap-3 pt-4 border-t border-gray-800 mb-8"><button id="preview-download-btn" class="bg-gray-800 text-white font-semibold py-3 rounded border border-gray-700 hover:bg-gray-700">Download</button><button id="save-photo-btn" class="bg-blue-600 text-white font-bold py-3 rounded hover:bg-blue-500 shadow-lg">Save</button></div>
-            </div>
-        </div>
+        <div class="flex-1 overflow-y-auto p-4 space-y-6"><div class="bg-black rounded-lg border border-gray-800 flex justify-center items-center overflow-hidden h-64 md:h-80 shrink-0 relative"><img id="preview-img" src="" class="h-full w-auto object-contain"></div><div class="space-y-4 max-w-lg mx-auto"><div class="space-y-2"><label class="block text-xs uppercase text-gray-500 font-bold">Burn-in Captions</label><input type="text" id="modal-caption-1" class="w-full bg-gray-800 text-white rounded p-3 border border-gray-700 text-sm"><input type="text" id="modal-caption-2" class="w-full bg-gray-800 text-white rounded p-3 border border-gray-700 text-sm"><input type="text" id="modal-caption-3" class="w-full bg-gray-800 text-white rounded p-3 border border-gray-700 text-sm"></div><div><label class="block text-xs uppercase text-gray-500 font-bold mb-1 flex justify-between"><span>Notes</span><button id="single-mic-btn" class="text-blue-400">Mic</button></label><textarea id="modal-metadata" class="w-full bg-gray-800 text-white rounded p-3 border border-gray-700 text-sm h-20"></textarea></div><div class="grid grid-cols-2 gap-3 pt-4 border-t border-gray-800 mb-8"><button id="preview-download-btn" class="bg-gray-800 text-white font-semibold py-3 rounded border border-gray-700 hover:bg-gray-700">Download</button><button id="save-photo-btn" class="bg-blue-600 text-white font-bold py-3 rounded hover:bg-blue-500 shadow-lg">Save</button></div></div></div>
     </div>
 
     <!-- Login Modal -->
@@ -408,6 +401,10 @@
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js';
         import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signInWithCustomToken, signOut, signInAnonymously, createUserWithEmailAndPassword, setPersistence, browserLocalPersistence } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
         import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
+        
+        // --- ADDED FIREBASE STORAGE DEPENDENCY ---
+        import { getStorage, ref, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js';
+
 
         // --- CONFIG ---
         // Hardcoded Firebase Config for deployment portability
@@ -421,7 +418,7 @@
             measurementId: "G-99YLN372F9"
         };
 
-        let app, auth, db, user, unsubscribeNotes, unsubscribePhotos, unsubscribeProjects;
+        let app, auth, db, storage, user, unsubscribeNotes, unsubscribePhotos, unsubscribeProjects; // ADDED storage
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-fieldcam';
 
         async function initFirebase() {
@@ -463,6 +460,7 @@
                 app = initializeApp(config);
                 auth = getAuth(app);
                 db = getFirestore(app);
+                storage = getStorage(app); // INITIALIZE STORAGE SERVICE
 
                 // FIX: Set persistence to LOCAL so named user sessions persist across restarts/closures
                 await setPersistence(auth, browserLocalPersistence);
@@ -523,7 +521,7 @@
             name: 'FieldCamDB', version: 5, // FIXED version number to 5
             open: function() { return new Promise((res, rej) => { const req = indexedDB.open(this.name, this.version); req.onupgradeneeded = (e) => { const db = e.target.result; if (!db.objectStoreNames.contains('photos')) db.createObjectStore('photos', { keyPath: 'id' }); if (!db.objectStoreNames.contains('notes')) db.createObjectStore('notes', { keyPath: 'id' }); }; req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error); }); },
             add: async function(s, o) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readwrite'); tx.objectStore(s).put(o); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); },
-            getAll: async function(s) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readonly'); const req = tx.objectStore(s).getAll(); req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error); }); },
+            getAll: async function(s) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readonly'); const req = tx.objectStore(s).getAll(); req.onsuccess = () => res(req.result); req.onerror = () => rej(tx.error); }); },
             delete: async function(s, id) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readwrite'); tx.objectStore(s).delete(id); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); },
             clear: async function(s) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readwrite'); tx.objectStore(s).clear(); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); },
             get: async function(s, id) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readonly'); const req = tx.objectStore(s).get(id); req.onsuccess = () => res(req.result); req.onerror = () => rej(tx.error); }); }
@@ -584,7 +582,7 @@
             downloadProjectBtn: document.getElementById('download-project-btn'), backupBtn: document.getElementById('backup-btn')
         };
         
-        // --- CORE FUNCTIONS (Rest of application logic remains the same) ---
+        // --- CORE FUNCTIONS ---
         
         async function restoreSession() {
             setProcessing(true, "Loading...");
@@ -1110,7 +1108,7 @@
                         if (col === 1 || i === photos.length - 1) { y += slotH + 20; }
                     } else {
                         if (y + slotH + 25 > pH - margin) { doc.addPage(); y = margin; }
-                        const centerX = (pW - slotW) / 2; doc.addImage(data, 'JPEG', centerX + offX, y + offY, dim.w, dim.h); y += slotH + 5;
+                        const centerX = (pW - slotW) / 2; doc.addImage(data, 'JPEG', centerX + offX, y + offY, dim.w, dim.h); y += slotW + 5;
                         doc.setFontSize(10); doc.setFont("helvetica", "bold"); doc.text(`Photo #${p.photoNumber} - ${p.timestamp}`, margin, y); y += 5;
                         doc.setFont("helvetica", "normal"); doc.setFontSize(9); const cap = [p.captions.c1, p.captions.c2, p.captions.c3].filter(Boolean).join(" | "); if (cap) { doc.text(cap, margin, y); y += 5; }
                         if (p.metaNote) { const nt = doc.splitTextToSize("Note: "+p.metaNote, pW-(margin*2)); doc.text(nt, margin, y); y += (nt.length*4); }
