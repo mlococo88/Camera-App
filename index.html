@@ -535,7 +535,7 @@
             getAll: async function(s) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readonly'); const req = tx.objectStore(s).getAll(); req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error); }); },
             delete: async function(s, id) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readwrite'); tx.objectStore(s).delete(id); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); },
             clear: async function(s) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readwrite'); tx.objectStore(s).clear(); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); },
-            get: async function(s, id) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readonly'); const req = tx.objectStore(s).get(id); req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error); }); }
+            get: async function(s, id) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readonly'); const req = tx.objectStore(s).get(id); req.onsuccess = () => res(req.result); req.onerror = () => rej(tx.error); }); }
         };
 
         const state = { 
@@ -1443,6 +1443,17 @@
                  return;
             }
 
+            // Load last successful email into the login modal
+            const lastEmail = localStorage.getItem('fc_last_email');
+            if (ui.loginEmail && lastEmail) {
+                ui.loginEmail.value = lastEmail;
+            }
+            // Clear password field for security
+            if (ui.loginPass) {
+                ui.loginPass.value = '';
+            }
+
+
             if (mode === 'login') {
                 ui.loginModalTitle.textContent = "Cloud Login";
                 ui.loginSubmit.textContent = "Log In";
@@ -1475,6 +1486,9 @@
                 } else {
                     await signInWithEmailAndPassword(auth, email, password);
                 }
+                
+                // SUCCESS: Save email for next session
+                localStorage.setItem('fc_last_email', email);
 
                 // If successful, the onAuthStateChanged listener handles the rest
                 ui.loginModal.classList.add('hidden');
@@ -1497,8 +1511,7 @@
             if (ui.sCloudEnable) ui.sCloudEnable.checked = false; 
             localStorage.setItem('fc_cloud', 'false');
 
-            // If a named user signed out, initFirebase will eventually try to sign them back in anonymously
-            // via the onAuthStateChanged listener detecting the logged out state.
+            // The onAuthStateChanged listener will detect the sign-out and automatically try to sign in anonymously.
         }
         function updateCloudUI(status) {
             ui.cloudStatus.className = 'absolute top-1 right-1 w-2 h-2 rounded-full border border-gray-700 ';
