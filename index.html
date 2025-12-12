@@ -197,9 +197,6 @@
         </div>
         <div id="notes-list" class="flex-1 overflow-y-auto p-4 space-y-3"><div id="notes-placeholder" class="text-center text-gray-500 mt-10 text-sm">No notes recorded yet.</div></div>
         <div class="p-4 bg-gray-800 border-t border-gray-700">
-            <!-- NEW TAGS INPUT -->
-            <input type="text" id="new-note-tags" class="w-full bg-gray-900 text-white rounded-lg p-3 border border-gray-600 focus:border-blue-500 outline-none text-sm resize-none mb-2" placeholder="Tags (e.g., N-Abutment, Cracks, Deck-B)">
-            
             <div class="relative"><textarea id="new-note-input" class="w-full bg-gray-900 text-white rounded-lg p-3 border border-gray-600 focus:border-blue-500 outline-none text-sm resize-none pr-10" rows="3" placeholder="Type observation..."></textarea><button id="note-mic-btn" class="absolute right-2 bottom-2 text-gray-400 hover:text-blue-400 p-2"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg></button></div>
             <div class="flex gap-2 mt-2"><button id="cancel-note-edit-btn" class="hidden flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 rounded-lg text-sm">Cancel</button><button id="add-note-btn" class="flex-[3] bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg text-sm transition-colors">Add Note</button></div>
         </div>
@@ -252,8 +249,6 @@
                 <div id="auth-status-container" class="mt-2 p-2 bg-gray-800 rounded border border-gray-700 hidden">
                      <p class="text-[10px] text-green-400 mb-1">Logged in as:</p>
                      <p id="user-email-display" class="text-xs font-bold text-white truncate mb-2">...</p>
-                     <!-- ADDED: Button to trigger manual email/password login -->
-                     <button id="login-manual-btn" class="w-full bg-blue-900/50 hover:bg-blue-800 text-blue-200 text-xs py-2 rounded border border-blue-800 hidden mb-2">Log In / Sign Up</button>
                      <button id="logout-btn" class="w-full bg-red-900/50 hover:bg-red-800 text-red-200 text-xs py-2 rounded border border-red-800">Sign Out</button>
                 </div>
 
@@ -299,72 +294,27 @@
             <!-- Project Defaults -->
             <div class="bg-gray-800 rounded-lg p-4 space-y-3">
                 <h3 class="text-xs font-bold text-blue-400 uppercase tracking-wider mb-2">Metadata Defaults</h3>
-                <div>
-                    <label class="block text-xs text-gray-400 mb-1">Inspector / Author</label>
-                    <input type="text" id="set-author" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-600 text-sm" placeholder="e.g. Mario LoCoco, P.E.">
-                </div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="block text-xs text-gray-400 mb-1">Next Photo #</label>
-                        <input type="number" id="set-next-num" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-600 text-sm">
-                    </div>
-                </div>
-                <div class="space-y-2 pt-2 border-t border-gray-700">
-                    <p class="text-xs text-gray-500">Default Captions for New Photos</p>
-                    <input type="text" id="set-def-c1" class="w-full bg-gray-900 text-white rounded p-2 border border-gray-600 text-xs" placeholder="Default Line 1">
-                    <input type="text" id="set-def-c2" class="w-full bg-gray-900 text-white rounded p-2 border border-gray-600 text-xs" placeholder="Default Line 2">
-                    <input type="text" id="set-def-c3" class="w-full bg-gray-900 text-white rounded p-2 border border-gray-600 text-xs" placeholder="Default Line 3">
-                </div>
+                <div><label class="block text-xs text-gray-400 mb-1">Inspector / Author</label><input type="text" id="set-author" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-600 text-sm" placeholder="e.g. Mario LoCoco, P.E."></div>
+                <div class="grid grid-cols-2 gap-3"><div><label class="block text-xs text-gray-400 mb-1">Next Photo #</label><input type="number" id="set-next-num" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-600 text-sm"></div></div>
+                <div class="space-y-2 pt-2 border-t border-gray-700"><p class="text-xs text-gray-500">Default Captions for New Photos</p><input type="text" id="set-def-c1" class="w-full bg-gray-900 text-white rounded p-2 border border-gray-600 text-xs" placeholder="Default Line 1"><input type="text" id="set-def-c2" class="w-full bg-gray-900 text-white rounded p-2 border border-gray-600 text-xs" placeholder="Default Line 2"><input type="text" id="set-def-c3" class="w-full bg-gray-900 text-white rounded p-2 border border-gray-600 text-xs" placeholder="Default Line 3"></div>
             </div>
             
             <!-- Branding -->
             <div class="bg-gray-800 rounded-lg p-4 space-y-3">
                 <h3 class="text-xs font-bold text-blue-400 uppercase tracking-wider mb-2">Report Branding</h3>
                 <div class="flex items-center gap-4">
-                    <div class="w-16 h-16 bg-gray-700 rounded border border-gray-600 flex items-center justify-center overflow-hidden">
-                        <img id="set-logo-preview" class="w-full h-full object-contain hidden">
-                        <span id="set-logo-placeholder" class="text-[10px] text-gray-500">No Logo</span>
-                    </div>
-                    <div class="flex-1">
-                        <label class="block text-xs text-gray-400 mb-1">Company Logo (for PDF)</label>
-                        <input type="file" id="set-logo-input" accept="image/*" class="w-full text-xs text-gray-400 file:mr-2 file:py-1 file:px-2 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-gray-700 file:text-blue-400 hover:file:bg-gray-600">
-                        <button id="clear-logo-btn" class="text-[10px] text-red-400 mt-1 hover:text-red-300 hidden">Remove Logo</button>
-                    </div>
+                    <div class="w-16 h-16 bg-gray-700 rounded border border-gray-600 flex items-center justify-center overflow-hidden"><img id="set-logo-preview" class="w-full h-full object-contain hidden"><span id="set-logo-placeholder" class="text-[10px] text-gray-500">No Logo</span></div>
+                    <div class="flex-1"><label class="block text-xs text-gray-400 mb-1">Company Logo (for PDF)</label><input type="file" id="set-logo-input" accept="image/*" class="w-full text-xs text-gray-400 file:mr-2 file:py-1 file:px-2 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-gray-700 file:text-blue-400 hover:file:bg-gray-600"><button id="clear-logo-btn" class="text-[10px] text-red-400 mt-1 hover:text-red-300 hidden">Remove Logo</button></div>
                 </div>
             </div>
 
             <!-- Camera & Image -->
             <div class="bg-gray-800 rounded-lg p-4 space-y-4">
                 <h3 class="text-xs font-bold text-blue-400 uppercase tracking-wider mb-2">Camera & Image</h3>
-                <div class="flex items-center justify-between">
-                    <span class="text-sm">Use Native Camera App</span>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" id="set-native-cam" class="sr-only peer">
-                        <div class="w-11 h-6 bg-gray-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 peer-checked:bg-blue-600"></div>
-                    </label>
-                </div>
-                <div class="flex items-center justify-between">
-                    <span class="text-sm">Burn Info on Photo</span>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" id="set-burn-in" class="sr-only peer" checked>
-                        <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                    </label>
-                </div>
-                <div class="flex items-center justify-between">
-                    <span class="text-sm">Burn Text Size</span>
-                    <select id="set-font-scale" class="bg-gray-900 text-white text-xs rounded p-2 border border-gray-600">
-                        <option value="35">Small</option>
-                        <option value="25" selected>Medium</option>
-                        <option value="18">Large</option>
-                    </select>
-                </div>
-                <div class="flex items-center justify-between">
-                    <span class="text-sm">Show Compass (In Preview)</span>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" id="set-compass-ui" class="sr-only peer" checked>
-                        <div class="w-11 h-6 bg-gray-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 peer-checked:bg-blue-600"></div>
-                    </label>
-                </div>
+                <div class="flex items-center justify-between"><span class="text-sm">Use Native Camera App</span><label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" id="set-native-cam" class="sr-only peer"><div class="w-11 h-6 bg-gray-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 peer-checked:bg-blue-600"></div></label></div>
+                <div class="flex items-center justify-between"><span class="text-sm">Burn Info on Photo</span><label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" id="set-burn-in" class="sr-only peer" checked><div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div></label></div>
+                <div class="flex items-center justify-between"><span class="text-sm">Burn Text Size</span><select id="set-font-scale" class="bg-gray-900 text-white text-xs rounded p-2 border border-gray-600"><option value="35">Small</option><option value="25" selected>Medium</option><option value="18">Large</option></select></div>
+                <div class="flex items-center justify-between"><span class="text-sm">Show Compass (In Preview)</span><label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" id="set-compass-ui" class="sr-only peer" checked><div class="w-11 h-6 bg-gray-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 peer-checked:bg-blue-600"></div></label></div>
                 <button id="enable-sensors-btn" class="w-full text-xs bg-gray-700 hover:bg-gray-600 py-2 rounded">Re-Request Compass Permission (iOS)</button>
             </div>
 
@@ -373,7 +323,7 @@
                 <h3 class="text-xs font-bold text-blue-400 uppercase tracking-wider mb-2">PDF Report Settings</h3>
                 <div class="flex items-center justify-between"><span class="text-sm">Report Title</span><input type="text" id="set-report-title" class="w-32 bg-gray-900 text-white rounded p-1 border border-gray-600 text-xs text-right" value="Field Inspection Report"></div>
                 <div class="flex items-center justify-between"><span class="text-sm">Photos Per Page</span><select id="set-pdf-layout" class="bg-gray-900 text-white text-xs rounded p-2 border border-gray-600"><option value="1">1 Photo (Large)</option><option value="2" selected>2 Photos (3x5)</option><option value="4">4 Photos (Grid)</option></select></div>
-                <div class="flex items-center justify-between"><span class="text-sm">PDF Resolution</span><select id="set-pdf-res" class="bg-gray-900 text-white text-xs rounded p-2 border border-gray-600"><option value="800">Screen (Email)</option><option value="2000" selected>Print (High Res</option></select></div>
+                <div class="flex items-center justify-between"><span class="text-sm">PDF Resolution</span><select id="set-pdf-res" class="bg-gray-900 text-white text-xs rounded p-2 border border-gray-600"><option value="800">Screen (Email)</option><option value="2000" selected>Print (High Res)</option></select></div>
                 <div class="flex items-center justify-between"><span class="text-sm">Include Map Section</span><input type="checkbox" id="set-inc-map" class="w-5 h-5 rounded bg-gray-900 border-gray-600" checked></div>
                 <div class="flex items-center justify-between"><span class="text-sm">Include Field Notes</span><input type="checkbox" id="set-inc-notes" class="w-5 h-5 rounded bg-gray-900 border-gray-600" checked></div>
             </div>
@@ -414,7 +364,7 @@
             <div class="flex gap-2 pt-2"><button id="cancel-batch-btn" class="flex-1 bg-gray-700 text-white font-bold py-3 rounded text-sm">Cancel</button><button id="apply-batch-btn" class="flex-1 bg-blue-600 text-white font-bold py-3 rounded text-sm">Apply</button></div>
         </div>
     </div>
-    
+
     <div id="preview-modal" class="fixed inset-0 z-50 bg-black/95 hidden flex flex-col">
         <div class="flex justify-between items-center p-4 bg-gray-900 border-b border-gray-800 shrink-0 safe-top-padding">
             <div class="flex items-center gap-3"><button id="close-preview-btn" class="text-gray-400 p-2 hover:text-white transition-colors"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></button></div>
@@ -423,7 +373,7 @@
         <div class="flex-1 overflow-y-auto p-4 space-y-6">
             <div class="bg-black rounded-lg border border-gray-800 flex justify-center items-center overflow-hidden h-64 md:h-80 shrink-0 relative"><img id="preview-img" src="" class="h-full w-auto object-contain"></div>
             <div class="space-y-4 max-w-lg mx-auto">
-                <div class="space-y-2"><label class="block text-xs uppercase text-gray-500 font-bold">Burn-in Captions</label><input type="text" id="modal-caption-1" class="w-full bg-gray-800 text-white rounded p-3 border border-gray-700 text-sm"><input type="text" id="modal-caption-2" class="w-full bg-gray-800 text-white rounded p-3 border border-gray-70m text-sm"><input type="text" id="modal-caption-3" class="w-full bg-gray-800 text-white rounded p-3 border border-gray-700 text-sm"></div>
+                <div class="space-y-2"><label class="block text-xs uppercase text-gray-500 font-bold">Burn-in Captions</label><input type="text" id="modal-caption-1" class="w-full bg-gray-800 text-white rounded p-3 border border-gray-700 text-sm"><input type="text" id="modal-caption-2" class="w-full bg-gray-800 text-white rounded p-3 border border-gray-700 text-sm"><input type="text" id="modal-caption-3" class="w-full bg-gray-800 text-white rounded p-3 border border-gray-700 text-sm"></div>
                 <div><label class="block text-xs uppercase text-gray-500 font-bold mb-1 flex justify-between"><span>Notes</span><button id="single-mic-btn" class="text-blue-400">Mic</button></label><textarea id="modal-metadata" class="w-full bg-gray-800 text-white rounded p-3 border border-gray-700 text-sm h-20"></textarea></div>
                 <div class="grid grid-cols-2 gap-3 pt-4 border-t border-gray-800 mb-8"><button id="preview-download-btn" class="bg-gray-800 text-white font-semibold py-3 rounded border border-gray-700 hover:bg-gray-700">Download</button><button id="save-photo-btn" class="bg-blue-600 text-white font-bold py-3 rounded hover:bg-blue-500 shadow-lg">Save</button></div>
             </div>
@@ -573,7 +523,7 @@
             name: 'FieldCamDB', version: 5, // FIXED version number to 5
             open: function() { return new Promise((res, rej) => { const req = indexedDB.open(this.name, this.version); req.onupgradeneeded = (e) => { const db = e.target.result; if (!db.objectStoreNames.contains('photos')) db.createObjectStore('photos', { keyPath: 'id' }); if (!db.objectStoreNames.contains('notes')) db.createObjectStore('notes', { keyPath: 'id' }); }; req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error); }); },
             add: async function(s, o) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readwrite'); tx.objectStore(s).put(o); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); },
-            getAll: async function(s) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readonly'); const req = tx.objectStore(s).getAll(); req.onsuccess = () => res(req.result); req.onerror = () => rej(tx.error); }); },
+            getAll: async function(s) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readonly'); const req = tx.objectStore(s).getAll(); req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error); }); },
             delete: async function(s, id) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readwrite'); tx.objectStore(s).delete(id); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); },
             clear: async function(s) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readwrite'); tx.objectStore(s).clear(); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); },
             get: async function(s, id) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readonly'); const req = tx.objectStore(s).get(id); req.onsuccess = () => res(req.result); req.onerror = () => rej(tx.error); }); }
@@ -703,12 +653,21 @@
                 const isSel = state.selectedIds.has(p.id);
                 const isSeries = state.currentSeriesIds.has(p.id);
                 
+                // Determine image source: local blob URL or cloud preview data URL
+                let imgSrc = p.displayUrl;
+                if (!imgSrc && p.preview_b64) {
+                    // This case handles images synced from other users (which are only compressed previews)
+                    imgSrc = `data:image/jpeg;base64,${p.preview_b64}`;
+                }
+
+
                 const div = document.createElement('div');
                 div.className = `relative grid-item-aspect bg-gray-800 rounded overflow-hidden cursor-pointer ${isSel ? 'selected-item' : ''} ${isSeries ? 'series-active-item' : ''}`;
                 div.onclick = () => handlePhotoClick(p.id);
                 
                 div.innerHTML = `
-                    <img src="${p.displayUrl || ''}" loading="lazy" class="transition-opacity">
+                    <img src="${imgSrc || 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='}" 
+                         loading="lazy" class="transition-opacity">
                     <div class="select-ring absolute inset-0 z-10"></div>
                     <div class="selection-check"><svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" /></svg></div>
                     <div class="absolute bottom-0 inset-x-0 bg-black/60 p-1 z-20">
@@ -746,13 +705,19 @@
             if (!p) return;
             state.editingId = id;
             
-            // If the photo has existing captions/notes (e.g., from series mode), use those.
+            // Determine source for preview modal: use high-res if local, otherwise the cloud preview
+            let imgSrc = p.displayUrl;
+            if (!imgSrc && p.preview_b64) {
+                 imgSrc = `data:image/jpeg;base64,${p.preview_b64}`;
+            }
+
+            // Populate inputs
             ui.inputs.c1.value = p.captions.c1 || state.settings.defC1 || ""; 
             ui.inputs.c2.value = p.captions.c2 || state.settings.defC2 || "";
             ui.inputs.c3.value = p.captions.c3 || state.settings.defC3 || "";
             ui.inputs.meta.value = p.metaNote || "";
             
-            ui.previewImg.src = p.displayUrl;
+            ui.previewImg.src = imgSrc;
             ui.previewModal.classList.remove('hidden');
         }
 
