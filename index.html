@@ -281,8 +281,8 @@
                     <!-- Project List Container (Hidden by default) -->
                     <div id="project-list-container" class="hidden mt-2 space-y-2 border-t border-gray-700 pt-2">
                          <div class="flex gap-2">
-                             <input type="text" id="new-project-input" placeholder="New Project Name" class="flex-1 bg-gray-900 text-white text-xs rounded p-2 border border-gray-600">
-                             <input type="text" id="new-project-id" placeholder="Project ID (Required)" class="flex-1 bg-gray-900 text-white text-xs rounded p-2 border border-gray-600">
+                             <input type="text" id="new-project-input" placeholder="New Project ID (e.g., Bridge-505)" class="flex-1 bg-gray-900 text-white text-xs rounded p-2 border border-gray-600">
+                             <!-- Removed redundant new-project-id input -->
                              <button id="add-project-btn" class="bg-blue-600 hover:bg-blue-500 text-white px-3 rounded">
                                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -815,7 +815,7 @@
                     <div class="absolute bottom-0 inset-x-0 bg-black/60 p-1 z-20">
                         <p class="text-[10px] text-white truncate font-mono">#${p.photoNumber}</p>
                     </div>
-                    ${!p.synced ? '<div class="pending-badge"><svg class="pending-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg></div>' : ''}
+                    ${!p.synced ? '<div class="pending-badge"><svg class="pending-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4-4m0 0L8 8m4-4v12" /></svg></div>' : ''}
                 `;
                 ui.gallery.appendChild(div);
             });
@@ -1355,15 +1355,10 @@
 
         async function createProject() {
             if (!user) return showAlert("You must be logged in with a named account to create new projects.");
-            const name = ui.newProjectInput.value.trim();
-            const idInput = ui.newProjectIdInput.value.trim();
+            const projectId = ui.newProjectInput.value.trim();
             
-            // Generate Project ID if not provided, otherwise clean the input
-            const projectId = idInput || name.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase() + '-' + Date.now().toString().slice(-4);
-
-
-            if (!name) {
-                return showAlert("Please provide a Project Name.");
+            if (!projectId) {
+                return showAlert("Please provide a Project ID.");
             }
 
             // Check if Project ID already exists in user's list
@@ -1373,10 +1368,9 @@
 
             // Path: /artifacts/{appId}/users/{userId}/projects/{projectId}
             const ref = doc(db, 'artifacts', appId, 'users', user.uid, 'projects', projectId);
-            await setDoc(ref, { name: name, id: projectId, created: Date.now() });
+            await setDoc(ref, { name: projectId, id: projectId, created: Date.now() }); // Use Project ID for both name and ID
             
             ui.newProjectInput.value = '';
-            ui.newProjectIdInput.value = '';
             switchProject(projectId); // Switches the active project immediately
         }
 
@@ -1438,7 +1432,7 @@
             state.userProjects.sort((a,b) => b.created - a.created).forEach(p => {
                 const option = document.createElement('option');
                 option.value = p.id;
-                option.textContent = `${p.name} (${p.id})`;
+                option.textContent = p.id; // Show Project ID as main name
                 if (p.id === state.settings.projectId) {
                     option.selected = true;
                 }
@@ -1464,7 +1458,7 @@
 
                 div.innerHTML = `
                     <span class="text-sm text-white truncate cursor-pointer flex-1" onclick="window.switchProject('${p.id}')">
-                        ${p.name} <span class="text-gray-400 font-mono text-[10px]">(${p.id})</span>
+                        ${p.id} 
                     </span>
                     ${isActive ? '<span class="text-[10px] text-blue-400 mr-2">Active</span>' : ''}
                     ${deleteBtnHtml}
@@ -1475,9 +1469,8 @@
         }
 
         function updateProjectUI(pid) {
-            // Looks up Project Name from saved projects or defaults to the ID
-            const p = state.userProjects.find(x => x.id === pid);
-            const name = p ? p.name : pid;
+            // Since we consolidated Project Name and ID, we just use the PID for display
+            const name = pid;
             
             // Update the main header display
             ui.projectIdDisplay.innerText = name;
@@ -1982,6 +1975,9 @@
             initCamera();
             setupDictation();
             setupEventListeners();
+            // Since initFirebase is synchronous until the auth block, we can safely restore UI/Data here.
+            restoreSession();
+            updateProjectUI(state.settings.projectId);
         };
     </script>
 </body>
