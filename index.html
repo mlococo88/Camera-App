@@ -156,7 +156,7 @@
             <div id="selection-toolbar" class="bg-gray-800 p-3 hidden flex-shrink-0 border-b border-gray-700">
                  <div class="flex justify-between items-center">
                      <div class="flex items-center gap-2"><button id="cancel-select-mode" class="text-gray-400 hover:text-white"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></button><span id="selection-count" class="text-sm font-bold text-white">0 Selected</span></div>
-                     <div class="flex gap-2"><button id="delete-selected-btn" class="bg-red-600/20 text-red-400 border border-red-600/50 text-xs font-bold py-2 px-3 rounded hover:bg-red-900/50">Delete</button><button id="download-selected-btn" class="bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold py-2 px-3 rounded">Download</button><button id="open-batch-modal-btn" class="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold py-2 px-3 rounded">Edit</button></div>
+                     <div class="flex gap-2"><button id="delete-selected-btn" class="bg-red-600/20 text-red-400 border border-red-600/50 text-xs font-bold py-2 px-3 rounded hover:bg-red-900/50">Delete</button><button id="download-selected-btn" class="bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold py-2 px-3 rounded hover:bg-gray-600">Download</button><button id="open-batch-modal-btn" class="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold py-2 px-3 rounded">Edit</button></div>
                  </div>
             </div>
             <div id="gallery-header" class="p-3 flex justify-between items-center bg-gray-800 border-b border-gray-700 flex-shrink-0">
@@ -249,6 +249,8 @@
                 <div id="auth-status-container" class="mt-2 p-2 bg-gray-800 rounded border border-gray-700 hidden">
                      <p class="text-[10px] text-green-400 mb-1">Logged in as:</p>
                      <p id="user-email-display" class="text-xs font-bold text-white truncate mb-2">...</p>
+                     <!-- RESTORED MANUAL LOGIN BUTTON -->
+                     <button id="login-manual-btn" class="w-full bg-blue-900/50 hover:bg-blue-800 text-blue-200 text-xs py-2 rounded border border-blue-800 mb-2">Log In / Sign Up</button>
                      <button id="logout-btn" class="w-full bg-red-900/50 hover:bg-red-800 text-red-200 text-xs py-2 rounded border border-red-800">Sign Out</button>
                 </div>
 
@@ -361,7 +363,7 @@
                 <div><label class="block text-xs uppercase text-gray-400 font-bold mb-1">Caption 3 (Bottom)</label><input type="text" id="group-caption-3" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-600 text-sm"></div>
                 <div><label class="block text-xs uppercase text-gray-400 font-bold mb-1 flex justify-between"><span>Notes (Metadata)</span><button id="group-mic-btn" class="text-blue-400 hover:text-white">Mic</button></label><textarea id="group-notes" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-700 text-sm h-20 resize-none"></textarea></div>
             </div>
-            <div class="flex gap-2 pt-2"><button id="cancel-batch-btn" class="flex-1 bg-gray-700 text-white font-bold py-3 rounded text-sm">Cancel</button><button id="apply-batch-btn" class="flex-1 bg-blue-600 text-white font-bold py-3 rounded text-sm">Apply</button></div>
+            <div class="flex gap-2 pt-2"><button id="cancel-batch-btn" class="flex-1 bg-gray-700 text-white font-bold py-3 rounded text-sm">Cancel</button><button id="apply-batch-btn" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded text-sm">Apply</button></div>
         </div>
     </div>
 
@@ -521,7 +523,7 @@
             name: 'FieldCamDB', version: 5, // FIXED version number to 5
             open: function() { return new Promise((res, rej) => { const req = indexedDB.open(this.name, this.version); req.onupgradeneeded = (e) => { const db = e.target.result; if (!db.objectStoreNames.contains('photos')) db.createObjectStore('photos', { keyPath: 'id' }); if (!db.objectStoreNames.contains('notes')) db.createObjectStore('notes', { keyPath: 'id' }); }; req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error); }); },
             add: async function(s, o) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readwrite'); tx.objectStore(s).put(o); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); },
-            getAll: async function(s) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readonly'); const req = tx.objectStore(s).getAll(); req.onsuccess = () => res(req.result); req.onerror = () => rej(tx.error); }); },
+            getAll: async function(s) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readonly'); const req = tx.objectStore(s).getAll(); req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error); }); },
             delete: async function(s, id) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readwrite'); tx.objectStore(s).delete(id); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); },
             clear: async function(s) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readwrite'); tx.objectStore(s).clear(); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); },
             get: async function(s, id) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readonly'); const req = tx.objectStore(s).get(id); req.onsuccess = () => res(req.result); req.onerror = () => rej(tx.error); }); }
@@ -936,7 +938,6 @@
         function editNote(id) {
             const note = state.notes.find(n => n.id === id);
             if (!note) return;
-            state.editingNoteId = id;
             
             // Populate tags and note input
             document.getElementById('new-note-tags').value = (note.tags || []).join(', ');
@@ -1139,7 +1140,7 @@
                         if (col === 1 || i === photos.length - 1) { y += slotH + 20; }
                     } else {
                         if (y + slotH + 25 > pH - margin) { doc.addPage(); y = margin; }
-                        const centerX = (pW - slotW) / 2; doc.addImage(data, 'JPEG', centerX + offX, y + offY, dim.w, dim.h); y += slotW + 5;
+                        const centerX = (pW - slotW) / 2; doc.addImage(data, 'JPEG', centerX + offX, y + offY, dim.w, dim.h); y += slotH + 5;
                         doc.setFontSize(10); doc.setFont("helvetica", "bold"); doc.text(`Photo #${p.photoNumber} - ${p.timestamp}`, margin, y); y += 5;
                         doc.setFont("helvetica", "normal"); doc.setFontSize(9); const cap = [p.captions.c1, p.captions.c2, p.captions.c3].filter(Boolean).join(" | "); if (cap) { doc.text(cap, margin, y); y += 5; }
                         if (p.metaNote) { const nt = doc.splitTextToSize("Note: "+p.metaNote, pW-(margin*2)); doc.text(nt, margin, y); y += (nt.length*4); }
@@ -1406,6 +1407,7 @@
                          ui.loginManualBtn.classList.add('hidden');
                          ui.logoutBtn.innerText = "Sign Out";
                      } else {
+                         // User is logged in, but anonymously (needs option to upgrade/switch)
                          ui.loginManualBtn.classList.remove('hidden');
                          ui.logoutBtn.innerText = "Disable Cloud Sync (Local)";
                      }
@@ -1414,10 +1416,10 @@
                 // Auto-check sync if user is logged in (even anon)
                 ui.sCloudEnable.checked = state.settings.cloudEnabled;
             } else {
-                // Not logged in
+                // Not logged in (e.g., after explicit Sign Out)
                 ui.authStatusContainer.classList.add('hidden');
                 ui.logoutBtn.classList.add('hidden');
-                if (ui.loginManualBtn) ui.loginManualBtn.classList.remove('hidden'); // Show login button if user is completely logged out (shouldn't happen with persistence set)
+                if (ui.loginManualBtn) ui.loginManualBtn.classList.remove('hidden'); 
             }
             
             updateCloudUI(isLoggedIn ? 'on' : 'off');
@@ -1868,7 +1870,7 @@
                 if(ui.batchModal) ui.batchModal.classList.add('hidden'); 
                 setProcessing(true); await new Promise(r => setTimeout(r, 50)); 
                 for (const id of state.selectedIds) { 
-                    const p = state.photos.find(ph => ph.id === id); 
+                    const p = state.photos.find(ph => ph.id === state.editingId); 
                     if(p) { if(c1) p.captions.c1 = c1; if(c2) p.captions.c2 = c2; if(c3) p.captions.c3 = c3; if(n) p.metaNote = n; await processPhotoVisuals(p); await DB.add('photos', await prepPhotoForSave(p)); } 
                 } 
                 setProcessing(false); state.selectedIds.clear(); renderGallery(); 
