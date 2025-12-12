@@ -500,7 +500,9 @@
                     updateAuthUI();
                     if(u) {
                         fetchUserProjects(); // Load project list
+                        // The rest of the app load depends on sync status
                         if(state.settings.cloudEnabled && state.settings.projectId) startCloudSync();
+                        
                         // Initial data load triggered after auth state confirmed
                         restoreSession();
                         updateProjectUI(state.settings.projectId);
@@ -535,7 +537,7 @@
             getAll: async function(s) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readonly'); const req = tx.objectStore(s).getAll(); req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error); }); },
             delete: async function(s, id) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readwrite'); tx.objectStore(s).delete(id); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); },
             clear: async function(s) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readwrite'); tx.objectStore(s).clear(); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); },
-            get: async function(s, id) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readonly'); const req = tx.objectStore(s).get(id); req.onsuccess = () => res(req.result); req.onerror = () => rej(tx.error); }); }
+            get: async function(s, id) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readonly'); const req = tx.objectStore(s).get(id); req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error); }); }
         };
 
         const state = { 
@@ -1808,7 +1810,18 @@
             
             if (ui.sCloudEnable) ui.sCloudEnable.onchange = (e) => { 
                 if(e.target.checked) { 
-                    state.settings.cloudEnabled = true; localStorage.setItem('fc_cloud', 'true'); 
+                    // FIX: If user is anonymous, auto-open the login modal before enabling sync.
+                    if (user && !user.email) {
+                         // Prevent checkbox from sticking if user cancels login
+                         e.target.checked = false; 
+                         state.settings.cloudEnabled = false;
+                         setLoginMode('login');
+                         ui.loginModal.classList.remove('hidden');
+                         return;
+                    }
+                    
+                    state.settings.cloudEnabled = true; 
+                    localStorage.setItem('fc_cloud', 'true'); 
                     if(user) startCloudSync();
                 } else { 
                     handleLogout(); // Disables cloud sync locally
