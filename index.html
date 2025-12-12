@@ -465,15 +465,21 @@
 
         // --- Authentication Flow ---
         async function initAuth() {
-            if (!auth) return; // Guard if init failed
+            if (!auth) return; 
             try {
+                // Try Custom Token first
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
+                    try {
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                    } catch (tokenErr) {
+                        console.warn("Token auth failed, falling back to anonymous", tokenErr);
+                        await signInAnonymously(auth);
+                    }
                 } else {
                     await signInAnonymously(auth);
                 }
             } catch (e) {
-                console.error("Auth Error:", e);
+                console.error("Auth Critical Error:", e);
                 updateCloudUI('error');
             }
         }
@@ -828,42 +834,61 @@
         async function syncPendingItems() {
             if (!user || !state.settings.cloudEnabled) return;
             
-            // Photos
-            const pendingPhotos = state.photos.filter(p => !p.synced);
-            for (const p of pendingPhotos) {
-                // Get thumbnails for upload (lightweight)
-                let b64 = "";
-                // We need to fetch the blob again to convert to b64
-                const rec = await DB.get('photos', p.id);
-                if(rec && (rec.thumbnailBlob || rec.finalBlob)) {
-                     const b = rec.thumbnailBlob || rec.finalBlob;
-                     b64 = await blobToBase64(b);
+            try {
+                // Photos
+                const pendingPhotos = state.photos.filter(p => !p.synced);
+                for (const p of pendingPhotos) {
+                    // Get thumbnails for upload (lightweight)
+                    let b64 = "";
+                    // We need to fetch the blob again to convert to b64
+                    const rec = await DB.get('photos', p.id);
+                    
+                    if(rec && (rec.thumbnailBlob || rec.finalBlob)) {
+                         const b = rec.thumbnailBlob || rec.finalBlob;
+                         try {
+                             b64 = await blobToBase64(b);
+                         } catch (blobErr) {
+                             console.warn("Failed to read blob for sync", blobErr);
+                             continue; // Skip this photo to avoid blocking queue
+                         }
+                    }
+                    
+                    // Sanitize payload to avoid undefined errors
+                    const payload = {
+                        id: p.id, 
+                        captions: p.captions, 
+                        metaNote: p.metaNote || "", 
+                        weather: p.weather || "",
+                        compass: p.compass || "", 
+                        photoNumber: p.photoNumber,
+                        timestamp: p.timestamp, 
+                        lat: p.lat || 0, 
+                        lon: p.lon || 0,
+                        thumbnail_b64: b64 || "", 
+                        synced: true
+                    };
+                    
+                    if(await uploadToCloud('shared_photos', p.id, payload)) {
+                        p.synced = true;
+                        // Update sync status in IDB
+                        if(rec) { rec.synced = true; await DB.add('photos', rec); }
+                    }
                 }
                 
-                const payload = {
-                    id: p.id, captions: p.captions, metaNote: p.metaNote, 
-                    weather: p.weather, compass: p.compass, photoNumber: p.photoNumber,
-                    timestamp: p.timestamp, lat: p.lat, lon: p.lon,
-                    thumbnail_b64: b64, synced: true
-                };
-                
-                if(await uploadToCloud('shared_photos', p.id, payload)) {
-                    p.synced = true;
-                    // Update sync status in IDB
-                    if(rec) { rec.synced = true; await DB.add('photos', rec); }
+                // Notes
+                const pendingNotes = state.notes.filter(n => !n.synced);
+                for (const n of pendingNotes) {
+                    if(await uploadToCloud('shared_notes', n.id, { ...n, synced: true })) {
+                        n.synced = true;
+                        await DB.add('notes', n);
+                    }
                 }
+                renderGallery();
+                renderNotes();
+            } catch (e) {
+                console.error("Sync Cycle Error:", e);
+                updateCloudUI('error');
             }
-            
-            // Notes
-            const pendingNotes = state.notes.filter(n => !n.synced);
-            for (const n of pendingNotes) {
-                if(await uploadToCloud('shared_notes', n.id, { ...n, synced: true })) {
-                    n.synced = true;
-                    await DB.add('notes', n);
-                }
-            }
-            renderGallery();
-            renderNotes();
         }
 
         function startCloudSync() {
@@ -958,7 +983,17 @@
         function setProcessing(active, msg="Processing...") { ui.processingText.textContent = msg; ui.processing.classList.toggle('hidden', !active); }
         function showAlert(msg) { return new Promise(r=>{ document.getElementById('alert-title').innerText="Notice"; document.getElementById('alert-message').innerText=msg; document.getElementById('alert-ok-btn').onclick=()=>{document.getElementById('custom-alert-overlay').classList.add('hidden');r();}; document.getElementById('alert-cancel-btn').classList.add('hidden'); document.getElementById('custom-alert-overlay').classList.remove('hidden'); }); }
         function showConfirm(msg) { return new Promise(r=>{ document.getElementById('alert-title').innerText="Confirm"; document.getElementById('alert-message').innerText=msg; document.getElementById('alert-cancel-btn').classList.remove('hidden'); document.getElementById('alert-ok-btn').onclick=()=>{document.getElementById('custom-alert-overlay').classList.add('hidden');r(true);}; document.getElementById('alert-cancel-btn').onclick=()=>{document.getElementById('custom-alert-overlay').classList.add('hidden');r(false);}; document.getElementById('custom-alert-overlay').classList.remove('hidden'); }); }
-        function blobToBase64(blob) { return new Promise((resolve) => { const reader = new FileReader(); reader.onloadend = () => resolve(reader.result); reader.readAsDataURL(blob); }); }
+        
+        function blobToBase64(blob) { 
+            return new Promise((resolve, reject) => { 
+                if(!blob) return resolve("");
+                const reader = new FileReader(); 
+                reader.onloadend = () => resolve(reader.result); 
+                reader.onerror = reject;
+                reader.readAsDataURL(blob); 
+            }); 
+        }
+        
         function updateCloudUI(status) {
             const dot = document.getElementById('cloud-icon-status');
             const msg = document.getElementById('cloud-status-msg');
@@ -994,6 +1029,52 @@
                 });
             }, (error) => { console.error("Project sync error:", error); });
         }
+        
+        // Export PDF Wrapper - Added missing function
+        async function generatePDFReport() {
+            setProcessing(true, "Generating PDF...");
+            try {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF({ unit: 'mm', format: 'letter' });
+                const margin = 15; let y = margin;
+                
+                doc.setFontSize(22); doc.text("Field Report", 108, 20, null, null, "center");
+                doc.setFontSize(12); doc.text(`Project: ${state.settings.projectId}`, 108, 30, null, null, "center");
+                
+                let count = 0;
+                y = 40;
+                
+                for(const p of state.photos) {
+                    if(y > 250) { doc.addPage(); y = margin; }
+                    
+                    const rec = await DB.get('photos', p.id);
+                    if(!rec) continue;
+                    
+                    let blob = rec.finalBlob || (rec.finalBuffer ? new Blob([rec.finalBuffer], {type:'image/jpeg'}) : null);
+                    if(blob) {
+                       const imgData = await blobToBase64(blob);
+                       doc.addImage(imgData, 'JPEG', margin, y, 80, 60);
+                       doc.setFontSize(10);
+                       doc.text(`#${p.photoNumber} - ${p.timestamp}`, margin + 85, y + 10);
+                       const caption = [p.captions.c1, p.captions.c2, p.captions.c3].filter(Boolean).join("\n");
+                       doc.setFontSize(9);
+                       doc.text(caption, margin + 85, y + 20);
+                       y += 70;
+                       count++;
+                    }
+                }
+                
+                if(count === 0) { showAlert("No photos to export."); } 
+                else { doc.save(`Report_${Date.now()}.pdf`); }
+                
+            } catch(e) {
+                console.error(e);
+                showAlert("PDF Error: " + e.message);
+            } finally {
+                setProcessing(false);
+            }
+        }
+
         async function prepPhotoForSave(p) { const b = await (p.finalBlob ? p.finalBlob.arrayBuffer() : null); const t = await (p.thumbnailBlob ? p.thumbnailBlob.arrayBuffer() : null); const s = {...p}; delete s.finalBlob; delete s.thumbnailBlob; s.finalBuffer = b; s.thumbnailBuffer = t; return s; }
 
         // --- Initialization ---
@@ -1034,6 +1115,9 @@
             ui.projectBtn.onclick = () => { ui.projectModal.classList.remove('hidden'); };
             ui.closeSettingsBtn.onclick = () => ui.projectModal.classList.add('hidden');
             document.getElementById('add-note-btn').onclick = saveNote;
+            
+            // Reconnected Export Button
+            document.getElementById('export-pdf-gallery-btn').onclick = generatePDFReport;
             
             // Search
             document.getElementById('gallery-search-input').oninput = (e) => { state.searchQuery = e.target.value; renderGallery(); };
