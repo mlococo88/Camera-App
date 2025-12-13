@@ -343,6 +343,8 @@
                 <button id="download-project-btn" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded mb-3 shadow-lg flex items-center justify-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>Download Project (ZIP)</button>
                 <div class="flex gap-2">
                     <button id="backup-btn" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-3 rounded">Save JSON</button>
+                    <!-- ADDED SYNC NOW BUTTON -->
+                    <button id="sync-now-btn" class="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white text-xs font-bold py-3 rounded">Sync Now</button>
                     <button id="new-visit-btn" class="flex-1 bg-red-900 hover:bg-red-800 text-white text-xs font-bold py-3 rounded">Reset</button>
                 </div>
             </div>
@@ -537,7 +539,7 @@
             getAll: async function(s) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readonly'); const req = tx.objectStore(s).getAll(); req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error); }); },
             delete: async function(s, id) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readwrite'); tx.objectStore(s).delete(id); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); },
             clear: async function(s) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readwrite'); tx.objectStore(s).clear(); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); },
-            get: async function(s, id) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readonly'); const req = tx.objectStore(s).get(id); req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error); }); }
+            get: async function(s, id) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction(s, 'readonly'); const req = tx.objectStore(s).get(id); req.onsuccess = () => res(req.result); req.onerror = () => rej(tx.error); }); }
         };
 
         const state = { 
@@ -1828,6 +1830,22 @@
                 } 
             };
 
+            // NEW: SYNC NOW BUTTON LISTENER
+            if (document.getElementById('sync-now-btn')) {
+                document.getElementById('sync-now-btn').onclick = () => {
+                    if (user && state.settings.cloudEnabled) {
+                        syncPendingItems();
+                    } else if (user && !state.settings.cloudEnabled) {
+                        showAlert("Cloud Sync is currently disabled. Please enable it in the settings first.");
+                    } else {
+                         // If no user (shouldn't happen with anonymous fallback, but safety first)
+                         showAlert("Please log in or sign up to use cloud sync.");
+                         setLoginMode('login');
+                         ui.loginModal.classList.remove('hidden');
+                    }
+                };
+            }
+
             if (ui.snapBtn) ui.snapBtn.onclick = () => ui.nativeInput.click();
             if (ui.nativeInput) ui.nativeInput.onchange = (e) => { if(e.target.files[0]) handleCapturedBlob(e.target.files[0]); };
             if (ui.addNoteBtn) ui.addNoteBtn.onclick = saveNote;
@@ -1842,7 +1860,7 @@
                 ui.modCamera.classList.add('hidden'); ui.modNotes.classList.remove('hidden'); ui.modMap.classList.add('hidden'); 
             };
             if (ui.navMap) ui.navMap.onclick = () => { 
-                ui.navMap.classList.add('nav-active'); ui.navCamera.classList.remove('nav-active'); ui.navNotes.classList.remove('nav-active');
+                ui.navMap.classList.add('nav-active'); ui.navCamera.classList.remove('nav-active'); ui.navMap.classList.remove('nav-active');
                 ui.modCamera.classList.add('hidden'); ui.modNotes.classList.add('hidden'); ui.modMap.classList.remove('hidden');
                 renderMapMarkers(); 
             };
